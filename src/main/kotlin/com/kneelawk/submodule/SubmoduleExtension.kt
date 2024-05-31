@@ -223,13 +223,16 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         }
     }
 
-    fun setupJavadoc() {
+    fun setupJavadoc(packageName: String) {
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
 
         javaEx.withJavadocJar()
 
         project.tasks.named("javadoc", Javadoc::class).configure {
             options.optionFiles(project.rootProject.file("javadoc-options.txt"))
+
+            exclude("$packageName/impl")
+            exclude("$packageName/**/impl")
         }
     }
 

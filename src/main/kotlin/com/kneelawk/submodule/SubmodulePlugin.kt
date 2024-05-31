@@ -148,9 +148,6 @@ class SubmodulePlugin : Plugin<Project> {
             }
 
             named("javadoc", Javadoc::class.java).configure {
-                exclude("com/kneelawk/commonevents/impl")
-                exclude("com/kneelawk/commonevents/**/impl")
-
 //              val minecraft_version: String by project
 //              val quilt_mappings: String by project
 //                val jetbrainsAnnotationsVersion = project.getProperty<String>("jetbrains_annotations_version")
