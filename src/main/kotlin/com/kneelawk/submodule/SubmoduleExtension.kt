@@ -29,6 +29,7 @@ import net.fabricmc.loom.api.LoomGradleExtensionAPI
 import net.fabricmc.loom.task.RemapJarTask
 import net.fabricmc.loom.task.RemapSourcesJarTask
 import org.gradle.api.Project
+import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
@@ -72,6 +73,11 @@ abstract class SubmoduleExtension(private val project: Project, private val java
                 }
             }
         }
+    }
+
+    fun setLibsDirectory() {
+        val baseEx = project.extensions.getByType(BasePluginExtension::class)
+        baseEx.libsDirectory.set(project.rootProject.layout.buildDirectory.dir("libs"))
     }
 
     fun setRefmaps(basename: String) {
