@@ -47,7 +47,7 @@ gradlePlugin {
     plugins {
         create("submodulePlugin") {
             id = "com.kneelawk.submodule"
-            implementationClass = "com.kneelawk.versioning.SubmodulePlugin"
+            implementationClass = "com.kneelawk.submodule.SubmodulePlugin"
         }
     }
 }
