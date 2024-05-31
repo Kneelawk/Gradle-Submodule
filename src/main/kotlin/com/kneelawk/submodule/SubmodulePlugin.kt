@@ -164,6 +164,9 @@ class SubmodulePlugin : Plugin<Project> {
 
             named("test", Test::class.java).configure {
                 useJUnit()
+                testLogging {
+                    events("passed", "skipped", "failed")
+                }
             }
         }
 
