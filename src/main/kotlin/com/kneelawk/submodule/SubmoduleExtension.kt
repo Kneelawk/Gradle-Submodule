@@ -40,9 +40,9 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 abstract class SubmoduleExtension(private val project: Project, private val javaVersion: String) {
-    var usingKotlin = false
-    lateinit var xplatName: String
-    val transitiveProjectDependencies = mutableListOf<ProjectDep>()
+    private var usingKotlin = false
+    private lateinit var xplatName: String
+    private val transitiveProjectDependencies = mutableListOf<ProjectDep>()
 
     fun applyKotlin(platform: String) {
         usingKotlin = true
