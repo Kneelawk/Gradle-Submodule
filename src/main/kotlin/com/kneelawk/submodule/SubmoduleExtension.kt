@@ -229,8 +229,10 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         }
     }
 
-    fun setupJavadoc(packageName: String) {
+    fun setupJavadoc() {
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
+
+        val packageName = project.getProperty<String>("javadoc_package_name")
 
         javaEx.withJavadocJar()
 
