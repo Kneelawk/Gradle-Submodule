@@ -285,7 +285,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.dependencies {
             add(config, project(xplatName, configuration = "namedElements"))
             add("testCompileOnly", project(xplatName, configuration = "namedElements"))
-            add("testLocalRuntime", project(xplatName, configuration = "namedElements"))
+            add("testRuntimeOnly", project(xplatName, configuration = "namedElements"))
         }
 
         if (transitive) {
