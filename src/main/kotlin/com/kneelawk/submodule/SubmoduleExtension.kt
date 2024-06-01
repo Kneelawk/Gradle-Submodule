@@ -338,8 +338,8 @@ abstract class SubmoduleExtension(private val project: Project, private val java
 
         project.dependencies {
             add(config, getter("xplat-intermediary"))
-            add("testModCompileOnly", getter("xplat-intermediary"))
-            add("testModLocalRuntime", getter("xplat-intermediary"))
+//            add("testModCompileOnly", getter("xplat-intermediary"))
+//            add("testModLocalRuntime", getter("xplat-intermediary"))
         }
 
         if (transitive) {
@@ -353,7 +353,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.dependencies {
             add(config, getter("fabric"))
             add("include", getter("fabric"))
-            add("testModImplementation", getter("fabric"))
+//            add("testModImplementation", getter("fabric"))
         }
     }
 
@@ -363,7 +363,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.dependencies {
             add(config, getter("neoforge"))
             add("include", getter("neoforge"))
-            add("testModImplementation", getter("neoforge"))
+//            add("testModImplementation", getter("neoforge"))
         }
     }
 
@@ -372,7 +372,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
 
         project.dependencies {
             add(config, getter("xplat-mojmap"))
-            add("testModCompileOnly", getter("xplat-mojmap"))
+//            add("testModCompileOnly", getter("xplat-mojmap"))
         }
     }
 }
