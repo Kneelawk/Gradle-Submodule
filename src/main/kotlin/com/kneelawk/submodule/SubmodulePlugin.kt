@@ -98,12 +98,27 @@ class SubmodulePlugin : Plugin<Project> {
         project.dependencies.apply {
             val minecraftVersion = project.getProperty<String>("minecraft_version")
             add("minecraft", "com.mojang:minecraft:$minecraftVersion")
-            val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
-            val parchmentVersion = project.getProperty<String>("parchment_version")
-            add("mappings", loomEx.layered {
-                officialMojangMappings()
-                parchment("org.parchmentmc.data:parchment-$parchmentMcVersion:$parchmentVersion@zip")
-            })
+
+            val mappingsType = project.findProperty("mappings_type") as? String ?: "mojmap"
+
+            when (mappingsType) {
+                "mojmap" -> {
+                    val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
+                    val parchmentVersion = project.getProperty<String>("parchment_version")
+                    add("mappings", loomEx.layered {
+                        officialMojangMappings()
+                        parchment("org.parchmentmc.data:parchment-$parchmentMcVersion:$parchmentVersion@zip")
+                    })
+                }
+                "yarn" -> {
+                    val yarnVersion = project.getProperty<String>("yarn_version")
+                    val yarnPatch = project.getProperty<String>("yarn_patch")
+                    add("mappings", loomEx.layered {
+                        mappings("net.fabricmc:yarn:$minecraftVersion+build.$yarnVersion:v2")
+                        mappings("dev.architectury:yarn-mappings-patch-neoforge:$yarnPatch")
+                    })
+                }
+            }
 
             add("compileOnly", "com.google.code.findbugs:jsr305:3.0.2")
             add("testCompileOnly", "com.google.code.findbugs:jsr305:3.0.2")
