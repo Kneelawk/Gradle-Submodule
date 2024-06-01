@@ -44,6 +44,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
     private var usingKotlin = false
     private lateinit var xplatName: String
     private val transitiveProjectDependencies = mutableListOf<ProjectDep>()
+    private val transitiveExternalDependencies = mutableListOf<ExternalDep>()
 
     fun applyKotlin(platform: String) {
         usingKotlin = true
@@ -153,6 +154,14 @@ abstract class SubmoduleExtension(private val project: Project, private val java
                 "neoforge" -> neoforgeProjectDependency(transitiveDep.projectBase, transitiveDep.api)
                 "fabric" -> fabricProjectDependency(transitiveDep.projectBase, transitiveDep.api)
                 "mojmap" -> mojmapProjectDependency(transitiveDep.projectBase, transitiveDep.api)
+            }
+        }
+
+        for (transitiveDep in xplatSubmodule.transitiveExternalDependencies) {
+            when (platform) {
+                "neoforge" -> neoforgeExternalDependency(transitiveDep.api, transitiveDep.getter)
+                "fabric" -> fabricExternalDependency(transitiveDep.api, transitiveDep.getter)
+                "mojmap" -> mojmapExternalDependency(transitiveDep.api, transitiveDep.getter)
             }
         }
 
@@ -276,6 +285,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.dependencies {
             add(config, project(xplatName, configuration = "namedElements"))
             add("testCompileOnly", project(xplatName, configuration = "namedElements"))
+            add("testLocalRuntime", project(xplatName, configuration = "namedElements"))
         }
 
         if (transitive) {
@@ -320,6 +330,49 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.dependencies {
             add(config, project(mojmapName, configuration = "namedElements"))
             add("testCompileOnly", project(mojmapName, configuration = "namedElements"))
+        }
+    }
+
+    fun xplatExternalDependency(transitive: Boolean = true, api: Boolean = true, getter: (platform: String) -> String) {
+        val config = if (api) "modApi" else "modCompileOnly"
+
+        project.dependencies {
+            add(config, getter("xplat-intermediary"))
+            add("testModCompileOnly", getter("xplat-intermediary"))
+            add("testModLocalRuntime", getter("xplat-intermediary"))
+        }
+
+        if (transitive) {
+            transitiveExternalDependencies.add(ExternalDep(getter, api))
+        }
+    }
+
+    fun fabricExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
+        val config = if (api) "modApi" else "modImplementation"
+
+        project.dependencies {
+            add(config, getter("fabric"))
+            add("include", getter("fabric"))
+            add("testModImplementation", getter("fabric"))
+        }
+    }
+
+    fun neoforgeExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
+        val config = if (api) "modApi" else "modImplementation"
+
+        project.dependencies {
+            add(config, getter("neoforge"))
+            add("include", getter("neoforge"))
+            add("testModImplementation", getter("neoforge"))
+        }
+    }
+
+    fun mojmapExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
+        val config = if (api) "modApi" else "modCompileOnly"
+
+        project.dependencies {
+            add(config, getter("xplat-mojmap"))
+            add("testModCompileOnly", getter("xplat-mojmap"))
         }
     }
 }
