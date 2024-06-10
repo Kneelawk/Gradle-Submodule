@@ -97,6 +97,20 @@ abstract class SubmoduleExtension(private val project: Project, private val java
     }
 
     fun applyNeoforgeDependency() {
+        project.repositories {
+            val neoforgePr = project.findProperty("neoforge_pr") as? String ?: "none"
+            val neoforgePrNum = neoforgePr.toIntOrNull()
+            if (neoforgePrNum != null) {
+                maven("https://prmaven.neoforged.net/NeoForge/pr${neoforgePrNum}") {
+                    name = "NeoForge PR #${neoforgePrNum}"
+                    content {
+                        includeModule("net.neoforged", "testframework")
+                        includeModule("net.neoforged", "neoforge")
+                    }
+                }
+            }
+        }
+
         project.dependencies.apply {
             val neoforgeVersion = project.getProperty<String>("neoforge_version")
             add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
