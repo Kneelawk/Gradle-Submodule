@@ -163,15 +163,54 @@ class SubmodulePlugin : Plugin<Project> {
             }
 
             named("javadoc", Javadoc::class.java).configure {
-//              val minecraft_version: String by project
-//              val quilt_mappings: String by project
-//                val jetbrainsAnnotationsVersion = project.getProperty<String>("jetbrains_annotations_version")
-//              val lns_version: String by project
-                (options as? StandardJavadocDocletOptions)?.links = listOf(
-//                  "https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-mappings/$minecraft_version+build.$quilt_mappings/quilt-mappings-$minecraft_version+build.$quilt_mappings-javadoc.jar/",
-//                    "https://javadoc.io/doc/org.jetbrains/annotations/${jetbrainsAnnotationsVersion}/",
-//                  "https://alexiil.uk/javadoc/libnetworkstack/${lns_version}/"
+                val minecraftVersion = project.getProperty<String>("minecraft_version")
+                val mappingsType = project.findProperty("mappings_type") as? String ?: "mojmap"
+
+                val baseLinks = listOf(
+                    "https://guava.dev/releases/32.1.2-jre/api/docs/",
+                    "https://www.javadoc.io/doc/com.google.code.gson/gson/2.10.1/",
+                    "https://logging.apache.org/log4j/2.x/javadoc/log4j-api/",
+                    "https://www.slf4j.org/apidocs/",
+                    "https://javadoc.lwjgl.org/",
+                    "https://fastutil.di.unimi.it/docs/",
+                    "https://javadoc.scijava.org/JOML/",
+                    "https://netty.io/4.1/api/",
+                    "https://www.oshi.ooo/oshi-core-java11/apidocs/",
+                    "https://java-native-access.github.io/jna/5.13.0/javadoc/",
+                    "https://unicode-org.github.io/icu-docs/apidoc/released/icu4j/",
+                    "https://jopt-simple.github.io/jopt-simple/apidocs/",
+                    "https://solutions.weblite.ca/java-objective-c-bridge/docs/",
+                    "https://commons.apache.org/proper/commons-logging/apidocs/",
+                    "https://commons.apache.org/proper/commons-lang/javadocs/api-release/",
+                    "https://commons.apache.org/proper/commons-io/apidocs/",
+                    "https://commons.apache.org/proper/commons-codec/archives/1.15/apidocs/",
+                    "https://commons.apache.org/proper/commons-compress/apidocs/",
+                    "https://hc.apache.org/httpcomponents-client-4.5.x/current/httpclient/apidocs/",
+                    "https://docs.oracle.com/en/java/javase/21/docs/api/"
                 )
+
+                val minecraftLinks = when (mappingsType) {
+                    "mojmap" -> {
+                        val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
+                        val parchmentVersion = project.getProperty<String>("parchment_version")
+                        val javadocBuild = project.findProperty("javadoc_build") as? String ?: "1"
+                        listOf(
+                            "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-vanilla-loom/${minecraftVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
+                        )
+                    }
+                    "yarn" -> {
+                        val yarnVersion = project.getProperty<String>("yarn_version")
+                        listOf("https://maven.fabricmc.net/docs/yarn-${minecraftVersion}+build.${yarnVersion}/")
+                    }
+                    else -> listOf()
+                }
+
+                val jbAnnotationsVersion = project.findProperty("jetbrains_annotations_version") as? String ?: "24.0.0"
+                val jbAnnotationsLinks = listOf(
+                    "https://javadoc.io/doc/org.jetbrains/annotations/${jbAnnotationsVersion}/"
+                )
+
+                (options as? StandardJavadocDocletOptions)?.links = baseLinks + minecraftLinks + jbAnnotationsLinks
             }
 
             named("test", Test::class.java).configure {
