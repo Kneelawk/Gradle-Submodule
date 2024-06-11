@@ -42,8 +42,10 @@ import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.maven
 import org.gradle.kotlin.dsl.withType
 import org.gradle.language.jvm.tasks.ProcessResources
+import org.jetbrains.kotlin.org.apache.commons.io.output.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
+import kotlin.streams.asSequence
 
 class SubmodulePlugin : Plugin<Project> {
     private val metadataFiles = listOf(
@@ -275,8 +277,7 @@ class SubmodulePlugin : Plugin<Project> {
         val url = URI(link).toURL()
         val huc = url.openConnection() as HttpURLConnection
         huc.instanceFollowRedirects = true
-        huc.requestMethod = "HEAD"
-        val responseCode = huc.responseCode
-        return responseCode / 100 == 2
+        val text = huc.inputStream.use { it.bufferedReader().readText() }
+        return text.isNotEmpty()
     }
 }
