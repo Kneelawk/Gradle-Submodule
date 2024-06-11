@@ -34,6 +34,7 @@ import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
+import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.*
 import org.gradle.language.jvm.tasks.ProcessResources
@@ -252,18 +253,29 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         }
     }
 
-    fun setupJavadoc() {
+    fun setupJavadoc(wError: Boolean = true) {
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
 
-        val packageName = project.getProperty<String>("javadoc_package_name")
+        val packageName = project.findProperty("javadoc_package_name") as? String
 
         javaEx.withJavadocJar()
 
         project.tasks.named("javadoc", Javadoc::class).configure {
-            options.optionFiles(project.rootProject.file("javadoc-options.txt"))
+            (options as? StandardJavadocDocletOptions)?.apply {
+                if (wError) {
+                    addBooleanOption("Werror")
+                }
+            }
 
-            exclude("$packageName/impl")
-            exclude("$packageName/**/impl")
+            val javadocOptionsFile = project.rootProject.file("javadoc-options.txt")
+            if (javadocOptionsFile.exists()) {
+                options.optionFiles(javadocOptionsFile)
+            }
+
+            if (packageName != null) {
+                exclude("$packageName/impl")
+                exclude("$packageName/**/impl")
+            }
         }
     }
 

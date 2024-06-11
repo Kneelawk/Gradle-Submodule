@@ -42,6 +42,8 @@ import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.maven
 import org.gradle.kotlin.dsl.withType
 import org.gradle.language.jvm.tasks.ProcessResources
+import java.net.HttpURLConnection
+import java.net.URI
 
 class SubmodulePlugin : Plugin<Project> {
     private val metadataFiles = listOf(
@@ -162,7 +164,20 @@ class SubmodulePlugin : Plugin<Project> {
                 }
             }
 
+            val processLinksDir = project.layout.buildDirectory.dir("processed-links")
+            val processLinksOutput = processLinksDir.map { it.file("javadoc-links.txt") }
+            val processLinks = create("processLinks", ProcessResources::class.java) {
+                from(project.rootProject.file("javadoc-links.txt"))
+                into(processLinksDir)
+
+                inputs.properties(project.properties)
+
+                expand(project.properties)
+            }
+
             named("javadoc", Javadoc::class.java).configure {
+                dependsOn(processLinks)
+
                 val minecraftVersion = project.getProperty<String>("minecraft_version")
                 val mappingsType = project.findProperty("mappings_type") as? String ?: "mojmap"
 
@@ -210,7 +225,20 @@ class SubmodulePlugin : Plugin<Project> {
                     "https://javadoc.io/doc/org.jetbrains/annotations/${jbAnnotationsVersion}/"
                 )
 
-                (options as? StandardJavadocDocletOptions)?.links = baseLinks + minecraftLinks + jbAnnotationsLinks
+                (options as? StandardJavadocDocletOptions)?.apply {
+                    addStringOption("-link-modularity-mismatch", "info")
+
+                    doFirst {
+                        val processLinksFile = processLinksOutput.get().asFile
+                        val loadedLinks = if (processLinksFile.exists()) {
+                            processLinksOutput.get().asFile.readText().split('\n').map { it.trim() }
+                        } else {
+                            listOf()
+                        }
+                        val collectedLinks = baseLinks + minecraftLinks + jbAnnotationsLinks + loadedLinks
+                        links = filterConnectable(collectedLinks)
+                    }
+                }
             }
 
             named("test", Test::class.java).configure {
@@ -224,5 +252,31 @@ class SubmodulePlugin : Plugin<Project> {
         project.afterEvaluate {
             tasks.findByName("genSources")?.apply { setDependsOn(listOf("genSourcesWithVineflower")) }
         }
+    }
+
+    private fun filterConnectable(links: List<String>): List<String> {
+        return links.filter { link ->
+            try {
+                val link2 = if (link.endsWith('/')) link else "$link/"
+                val res = checkLink("${link2}element-list") || checkLink("${link2}package-list")
+                if (!res) {
+                    println("Skipping ($link) due to connection errors")
+                }
+
+                res
+            } catch (e: Exception) {
+                println("Skipping ($link) due to: ${e.stackTraceToString()}")
+                false
+            }
+        }
+    }
+
+    private fun checkLink(link: String): Boolean {
+        val url = URI(link).toURL()
+        val huc = url.openConnection() as HttpURLConnection
+        huc.instanceFollowRedirects = true
+        huc.requestMethod = "HEAD"
+        val responseCode = huc.responseCode
+        return responseCode / 100 == 2
     }
 }
