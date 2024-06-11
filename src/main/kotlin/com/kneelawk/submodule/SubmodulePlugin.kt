@@ -42,10 +42,8 @@ import org.gradle.kotlin.dsl.getByType
 import org.gradle.kotlin.dsl.maven
 import org.gradle.kotlin.dsl.withType
 import org.gradle.language.jvm.tasks.ProcessResources
-import org.jetbrains.kotlin.org.apache.commons.io.output.ByteArrayOutputStream
 import java.net.HttpURLConnection
 import java.net.URI
-import kotlin.streams.asSequence
 
 class SubmodulePlugin : Plugin<Project> {
     private val metadataFiles = listOf(
@@ -258,26 +256,26 @@ class SubmodulePlugin : Plugin<Project> {
 
     private fun filterConnectable(links: List<String>): List<String> {
         return links.filter { link ->
-            try {
-                val link2 = if (link.endsWith('/')) link else "$link/"
-                val res = checkLink("${link2}element-list") || checkLink("${link2}package-list")
-                if (!res) {
-                    println("Skipping ($link) due to connection errors")
-                }
+            val link2 = if (link.endsWith('/')) link else "$link/"
+            val res = checkLink("${link2}element-list") || checkLink("${link2}package-list")
 
-                res
-            } catch (e: Exception) {
-                println("Skipping ($link) due to: ${e.stackTraceToString()}")
-                false
+            if (!res) {
+                println("Skipping ($link) due to connection errors")
             }
+
+            res
         }
     }
 
     private fun checkLink(link: String): Boolean {
-        val url = URI(link).toURL()
-        val huc = url.openConnection() as HttpURLConnection
-        huc.instanceFollowRedirects = true
-        val text = huc.inputStream.use { it.bufferedReader().readText() }
-        return text.isNotEmpty()
+        try {
+            val url = URI(link).toURL()
+            val huc = url.openConnection() as HttpURLConnection
+            huc.instanceFollowRedirects = true
+            val text = huc.inputStream.use { it.bufferedReader().readText() }
+            return text.isNotEmpty()
+        } catch (e: Exception) {
+            return false
+        }
     }
 }
