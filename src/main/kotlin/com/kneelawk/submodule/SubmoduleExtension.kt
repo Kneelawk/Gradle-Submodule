@@ -264,7 +264,7 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.tasks.named("javadoc", Javadoc::class).configure {
             (options as? StandardJavadocDocletOptions)?.apply {
                 if (wError && javadocWerror) {
-                    addBooleanOption("Werror")
+                    addBooleanOption("Werror", true)
                 }
             }
 
