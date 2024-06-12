@@ -222,11 +222,14 @@ abstract class SubmoduleExtension(private val project: Project, private val java
     }
 
     fun generateRuns() {
-        val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class);
+        val username = project.findProperty("minecraft_username") as? String ?: "kneelawk"
+        val uuid = project.findProperty("minecraft_uuid") as? String ?: "4c63e52938bd4ed5a14d77abbbe11aae"
+
+        val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
         loomEx.runs {
             named("client") {
                 ideConfigGenerated(true)
-                programArgs("--width", "1280", "--height", "720")
+                programArgs("--width", "1280", "--height", "720", "--username", username, "--uuid", uuid)
             }
             named("server") {
                 ideConfigGenerated(true)
