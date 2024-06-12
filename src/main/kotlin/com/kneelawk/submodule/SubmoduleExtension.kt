@@ -257,12 +257,13 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
 
         val packageName = project.findProperty("javadoc_package_name") as? String
+        val javadocWerror = (project.findProperty("javadoc_werror") as? String)?.toBoolean() ?: true
 
         javaEx.withJavadocJar()
 
         project.tasks.named("javadoc", Javadoc::class).configure {
             (options as? StandardJavadocDocletOptions)?.apply {
-                if (wError) {
+                if (wError && javadocWerror) {
                     addBooleanOption("Werror")
                 }
             }
