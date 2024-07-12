@@ -87,7 +87,7 @@ class SubmodulePlugin : Plugin<Project> {
             mavenCentral()
             maven("https://maven.quiltmc.org/repository/release") { name = "Quilt" }
             maven("https://maven.neoforged.net/releases/") { name = "NeoForged" }
-            maven("https://maven.firstdark.dev/snapshots") { name = "FirstDark" }
+//            maven("https://maven.firstdark.dev/snapshots") { name = "FirstDark" }
             maven("https://maven.kneelawk.com/releases/") { name = "Kneelawk" }
             maven("https://maven.alexiil.uk/") { name = "AlexIIL" }
             maven("https://maven.parchmentmc.org") { name = "ParchmentMC" }
