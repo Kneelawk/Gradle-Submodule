@@ -26,40 +26,49 @@
 package com.kneelawk.submodule
 
 import net.fabricmc.loom.api.LoomGradleExtensionAPI
+import net.fabricmc.loom.task.RemapJarTask
+import net.fabricmc.loom.task.RemapSourcesJarTask
+import net.neoforged.moddevgradle.dsl.NeoForgeExtension
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.SourceSetContainer
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
-import org.gradle.kotlin.dsl.create
-import org.gradle.kotlin.dsl.getByType
-import org.gradle.kotlin.dsl.maven
-import org.gradle.kotlin.dsl.withType
+import org.gradle.kotlin.dsl.*
 import org.gradle.language.jvm.tasks.ProcessResources
+import org.jetbrains.kotlin.gradle.utils.extendsFrom
 import java.net.HttpURLConnection
 import java.net.URI
+import java.util.Properties
 
 class SubmodulePlugin : Plugin<Project> {
-    private val metadataFiles = listOf(
-        "quilt.mod.json",
-        "fabric.mod.json",
-        "META-INF/mods.toml",
-        "META-INF/neoforge.mods.toml",
-        "pack.mcmeta"
-    )
+    companion object {
+        private val metadataFiles = listOf(
+            "quilt.mod.json",
+            "fabric.mod.json",
+            "META-INF/mods.toml",
+            "META-INF/neoforge.mods.toml",
+            "pack.mcmeta"
+        )
+    }
 
     override fun apply(project: Project) {
-        project.plugins.apply("dev.architectury.loom")
+        val props = Properties()
+        props.load(javaClass.classLoader.getResourceAsStream("com/kneelawk/submodule/plugin.properties"))
+        val pluginVersion: String by props
+        println("Submodule version: $pluginVersion")
+
+        project.plugins.apply("org.gradle.java-library")
 
         val baseEx = project.extensions.getByType(BasePluginExtension::class)
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
-        val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
 
         val javaVersion = if (System.getenv("JAVA_VERSION") != null) {
             System.getenv("JAVA_VERSION")
@@ -67,7 +76,46 @@ class SubmodulePlugin : Plugin<Project> {
             project.getProperty<String>("java_version")
         }
 
-        project.extensions.create("submodule", SubmoduleExtension::class, project, javaVersion)
+        val platformStr = project.getProperty<String>("submodule.platform")
+        val platform = when (platformStr) {
+            "xplat" -> Platform.XPLAT
+            "mojmap" -> Platform.MOJMAP
+            "fabric" -> Platform.FABRIC
+            "neoforge" -> Platform.NEOFORGE
+            else -> throw IllegalArgumentException("Unrecognized submodule.platform type: $platformStr")
+        }
+
+        if (platform == Platform.NEOFORGE) {
+            (project.properties as MutableMap<String, String>)["loom.platform"] = "neoforge"
+        }
+
+        val modId = project.getProperty<String>("mod_id")
+
+        val submoduleModeStr = project.findProperty("submodule.mode") as? String ?: "platform"
+        val submoduleMode = when (submoduleModeStr.lowercase()) {
+            "platform" -> SubmoduleMode.PLATFORM
+            "architectury", "arch" -> SubmoduleMode.ARCHITECTURY
+            else -> throw IllegalArgumentException("Unrecognized submodule.mode: $submoduleModeStr")
+        }
+
+        // apply plugins
+        val loom: Boolean
+        if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
+            project.plugins.apply("dev.architectury.loom")
+            loom = true
+        } else {
+            if (platform == Platform.NEOFORGE) {
+                project.plugins.apply("net.neoforged.moddev")
+                loom = false
+            } else {
+                project.plugins.apply("fabric-loom")
+                loom = true
+            }
+        }
+
+        project.extensions.create(
+            "submodule", SubmoduleExtension::class, project, javaVersion, platform, submoduleMode, modId
+        )
 
         val mavenGroup = project.getProperty<String>("maven_group")
         project.group = mavenGroup
@@ -83,7 +131,12 @@ class SubmodulePlugin : Plugin<Project> {
             withSourcesJar()
         }
 
-        project.repositories.apply {
+        project.configurations {
+            named("testCompileClasspath").extendsFrom(named("compileClasspath"))
+            named("testRuntimeClasspath").extendsFrom(named("runtimeClasspath"))
+        }
+
+        project.repositories {
             mavenCentral()
             maven("https://maven.quiltmc.org/repository/release") { name = "Quilt" }
             maven("https://maven.neoforged.net/releases/") { name = "NeoForged" }
@@ -94,31 +147,72 @@ class SubmodulePlugin : Plugin<Project> {
             maven("https://maven.terraformersmc.com/releases/") { name = "TerraformersMC" }
             maven("https://thedarkcolour.github.io/KotlinForForge/") { name = "Kotlin" }
 
+            // manage neoforge pr repos
+            if (platform == Platform.NEOFORGE) {
+                val neoforgePr = project.findProperty("neoforge_pr") as? String ?: "none"
+                val neoforgePrNum = neoforgePr.toIntOrNull()
+                if (neoforgePrNum != null) {
+                    maven("https://prmaven.neoforged.net/NeoForge/pr${neoforgePrNum}") {
+                        name = "NeoForge PR #${neoforgePrNum}"
+                        content {
+                            includeModule("net.neoforged", "testframework")
+                            includeModule("net.neoforged", "neoforge")
+                        }
+                    }
+                }
+            }
+
             mavenLocal()
         }
 
-        project.dependencies.apply {
-            val minecraftVersion = project.getProperty<String>("minecraft_version")
-            add("minecraft", "com.mojang:minecraft:$minecraftVersion")
+        project.dependencies {
+            if (loom) {
+                val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
 
-            val mappingsType = project.findProperty("mappings_type") as? String ?: "mojmap"
+                val minecraftVersion = project.getProperty<String>("minecraft_version")
+                add("minecraft", "com.mojang:minecraft:$minecraftVersion")
 
-            when (mappingsType) {
-                "mojmap" -> {
-                    val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
-                    val parchmentVersion = project.getProperty<String>("parchment_version")
-                    add("mappings", loomEx.layered {
-                        officialMojangMappings()
-                        parchment("org.parchmentmc.data:parchment-$parchmentMcVersion:$parchmentVersion@zip")
-                    })
+                val mappingsType = (project.findProperty("mappings_type") as? String)?.lowercase() ?: "mojmap"
+                when (mappingsType) {
+                    "mojmap" -> {
+                        val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
+                        val parchmentVersion = project.getProperty<String>("parchment_version")
+                        add("mappings", loomEx.layered {
+                            officialMojangMappings {
+                                nameSyntheticMembers = true
+                            }
+                            parchment("org.parchmentmc.data:parchment-$parchmentMcVersion:$parchmentVersion@zip")
+                        })
+                    }
+                    "yarn" -> {
+                        val yarnVersion = project.getProperty<String>("yarn_version")
+                        val yarnPatch = project.getProperty<String>("yarn_patch")
+                        add("mappings", loomEx.layered {
+                            mappings("net.fabricmc:yarn:$minecraftVersion+build.$yarnVersion:v2")
+                            mappings("dev.architectury:yarn-mappings-patch-neoforge:$yarnPatch")
+                        })
+                    }
                 }
-                "yarn" -> {
-                    val yarnVersion = project.getProperty<String>("yarn_version")
-                    val yarnPatch = project.getProperty<String>("yarn_patch")
-                    add("mappings", loomEx.layered {
-                        mappings("net.fabricmc:yarn:$minecraftVersion+build.$yarnVersion:v2")
-                        mappings("dev.architectury:yarn-mappings-patch-neoforge:$yarnPatch")
-                    })
+
+                when (platform) {
+                    Platform.XPLAT, Platform.MOJMAP -> {
+                        val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
+                        add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
+                        add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
+                    }
+                    Platform.FABRIC -> {
+                        val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
+                        add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
+                        add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
+
+                        val fapiVersion = project.getProperty<String>("fapi_version")
+                        add("modCompileOnly", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
+                        add("modLocalRuntime", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
+                    }
+                    Platform.NEOFORGE -> {
+                        val neoforgeVersion = project.getProperty<String>("neoforge_version")
+                        add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
+                    }
                 }
             }
 
@@ -130,10 +224,60 @@ class SubmodulePlugin : Plugin<Project> {
             add("testRuntimeOnly", "org.junit.platform:junit-platform-launcher")
         }
 
-        project.tasks.apply {
+        val sourceSets = project.extensions.getByType(SourceSetContainer::class)
+
+        if (loom) {
+            // do loom stuff
+            val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
+
+            if (loomEx.mods.findByName("main") == null) {
+                loomEx.mods.create(modId) {
+                    sourceSet(sourceSets.named("main").get())
+                }
+            }
+
+            if (platform == Platform.XPLAT) {
+                project.tasks.named("jar", Jar::class).configure {
+                    manifest {
+                        attributes("Fabric-Loom-Remap" to true)
+                    }
+                }
+            }
+
+            val mappingsType = (project.findProperty("mappings_type") as? String)?.lowercase() ?: "mojmap"
+            if (platform == Platform.MOJMAP && mappingsType == "mojmap") {
+                project.tasks {
+                    named("remapJar", RemapJarTask::class).configure {
+                        targetNamespace.set("named")
+                    }
+                    named("remapSourcesJar", RemapSourcesJarTask::class).configure {
+                        targetNamespace.set("named")
+                    }
+                }
+            }
+        } else if (platform == Platform.NEOFORGE) {
+            // do moddev stuff
+            val neoforgeEx = project.extensions.getByType(NeoForgeExtension::class)
+
+            neoforgeEx.version.set(project.getProperty<String>("neoforge_version"))
+
+            neoforgeEx.parchment {
+                mappingsVersion.set(project.getProperty<String>("parchment_version"))
+                minecraftVersion.set(project.getProperty<String>("parchment_mc_version"))
+            }
+
+            neoforgeEx.mods {
+                create(modId) {
+                    sourceSet(sourceSets.named("main").get())
+                }
+            }
+        }
+
+        project.tasks {
             named("processResources", ProcessResources::class.java).configure {
                 val properties = mapOf(
-                    "version" to project.version
+                    "version" to project.version,
+                    "mod_id" to modId
                 )
 
                 inputs.properties(properties)

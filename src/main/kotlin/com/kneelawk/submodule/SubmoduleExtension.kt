@@ -26,8 +26,7 @@
 package com.kneelawk.submodule
 
 import net.fabricmc.loom.api.LoomGradleExtensionAPI
-import net.fabricmc.loom.task.RemapJarTask
-import net.fabricmc.loom.task.RemapSourcesJarTask
+import net.neoforged.moddevgradle.dsl.NeoForgeExtension
 import org.gradle.api.Project
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.api.plugins.JavaPluginExtension
@@ -41,7 +40,11 @@ import org.gradle.language.jvm.tasks.ProcessResources
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
-abstract class SubmoduleExtension(private val project: Project, private val javaVersion: String) {
+abstract class SubmoduleExtension(
+    private val project: Project, private val javaVersion: String, private val platform: Platform,
+    private val submoduleMode: SubmoduleMode, private val modId: String
+) {
+    private val loom = submoduleMode == SubmoduleMode.ARCHITECTURY || platform != Platform.NEOFORGE
     private var usingKotlin = false
     private lateinit var xplatName: String
     private val transitiveProjectDependencies = mutableListOf<ProjectDep>()
@@ -83,6 +86,10 @@ abstract class SubmoduleExtension(private val project: Project, private val java
     }
 
     fun setRefmaps(basename: String) {
+        if (platform == Platform.NEOFORGE) throw UnsupportedOperationException(
+            "refmaps cannot be set on a neoforge platform"
+        )
+
         val refmapName = "${basename}.refmap.json"
 
         val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
@@ -97,86 +104,62 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         }
     }
 
-    fun applyNeoforgeDependency() {
-        project.repositories {
-            val neoforgePr = project.findProperty("neoforge_pr") as? String ?: "none"
-            val neoforgePrNum = neoforgePr.toIntOrNull()
-            if (neoforgePrNum != null) {
-                maven("https://prmaven.neoforged.net/NeoForge/pr${neoforgePrNum}") {
-                    name = "NeoForge PR #${neoforgePrNum}"
-                    content {
-                        includeModule("net.neoforged", "testframework")
-                        includeModule("net.neoforged", "neoforge")
-                    }
-                }
-            }
-        }
-
-        project.dependencies.apply {
-            val neoforgeVersion = project.getProperty<String>("neoforge_version")
-            add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
-        }
-    }
-
-    fun applyFabricLoaderDependency() {
-        project.dependencies.apply {
-            val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
-            add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
-            add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
-        }
-    }
-
-    fun applyFabricApiDependency() {
-        project.dependencies.apply {
-            val fapiVersion = project.getProperty<String>("fapi_version")
-            add("modCompileOnly", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
-            add("modLocalRuntime", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
-        }
-    }
-
-    fun applyXplatConnection(xplatName: String, platform: String) {
+    fun applyXplatConnection(xplatName: String) {
         this.xplatName = xplatName
 
         val xplatProject = project.evaluationDependsOn(xplatName)
 
-        val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
-        val xplatLoom = xplatProject.extensions.getByType(LoomGradleExtensionAPI::class)
         val xplatSubmodule = xplatProject.extensions.getByType(SubmoduleExtension::class)
         val xplatSourceSets = xplatProject.extensions.getByType(SourceSetContainer::class)
         val mainSource = xplatSourceSets.named("main")
 
-        if (loomEx.mods.findByName("main") != null) {
-            loomEx.mods.named("main").configure { sourceSet(mainSource.get()) }
-        } else {
-            loomEx.mods.create("main") {
-                sourceSet(project.extensions.getByType(SourceSetContainer::class).named("main").get())
-                sourceSet(mainSource.get())
+        var refmapName = "none"
+
+        if (loom) {
+            val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
+            val xplatLoom = xplatProject.extensions.getByType(LoomGradleExtensionAPI::class)
+
+            refmapName = loomEx.mixin.defaultRefmapName.get()
+
+            if (loomEx.mods.findByName("main") != null) {
+                loomEx.mods.named("main").configure { sourceSet(mainSource.get()) }
+            } else if (loomEx.mods.findByName(modId) != null) {
+                loomEx.mods.named(modId) {
+                    sourceSet(project.extensions.getByType(SourceSetContainer::class).named("main").get())
+                    sourceSet(mainSource.get())
+                }
+            }
+
+            if (platform != Platform.NEOFORGE) {
+                loomEx.mixin.defaultRefmapName.set(xplatLoom.mixin.defaultRefmapName)
             }
         }
 
-        val onNeoForge = platform == "neoforge"
-
-        if (!onNeoForge) {
-            loomEx.mixin.defaultRefmapName.set(xplatLoom.mixin.defaultRefmapName)
-        }
-
-        project.dependencies.apply {
-            add("compileOnly", project(xplatName, configuration = "namedElements"))
+        project.dependencies {
+            add("compileOnly", project(xplatName, configuration = "namedElements")) {
+                isTransitive = false
+            }
         }
 
         for (transitiveDep in xplatSubmodule.transitiveProjectDependencies) {
             when (platform) {
-                "neoforge" -> neoforgeProjectDependency(transitiveDep.projectBase, transitiveDep.api)
-                "fabric" -> fabricProjectDependency(transitiveDep.projectBase, transitiveDep.api)
-                "mojmap" -> mojmapProjectDependency(transitiveDep.projectBase, transitiveDep.api)
+                Platform.XPLAT -> throw UnsupportedOperationException(
+                    "Cannot apply an xplat connection from an xplat project"
+                )
+                Platform.NEOFORGE -> neoforgeProjectDependency(transitiveDep.projectBase, transitiveDep.api)
+                Platform.FABRIC -> fabricProjectDependency(transitiveDep.projectBase, transitiveDep.api)
+                Platform.MOJMAP -> mojmapProjectDependency(transitiveDep.projectBase, transitiveDep.api)
             }
         }
 
         for (transitiveDep in xplatSubmodule.transitiveExternalDependencies) {
             when (platform) {
-                "neoforge" -> neoforgeExternalDependency(transitiveDep.api, transitiveDep.getter)
-                "fabric" -> fabricExternalDependency(transitiveDep.api, transitiveDep.getter)
-                "mojmap" -> mojmapExternalDependency(transitiveDep.api, transitiveDep.getter)
+                Platform.XPLAT -> throw UnsupportedOperationException(
+                    "Cannot apply an xplat connection from an xplat project"
+                )
+                Platform.NEOFORGE -> neoforgeExternalDependency(transitiveDep.api, transitiveDep.getter)
+                Platform.FABRIC -> fabricExternalDependency(transitiveDep.api, transitiveDep.getter)
+                Platform.MOJMAP -> mojmapExternalDependency(transitiveDep.api, transitiveDep.getter)
             }
         }
 
@@ -184,15 +167,13 @@ abstract class SubmoduleExtension(private val project: Project, private val java
             named("processResources", ProcessResources::class.java).configure {
                 from(mainSource.map { it.resources })
 
-                if (onNeoForge) {
+                if (platform == Platform.NEOFORGE) {
                     exclude("fabric.mod.json")
 
                     filesMatching("*.mixins.json") {
                         filter { if (it.contains("refmap")) "" else it }
                     }
                 } else {
-                    val refmapName = loomEx.mixin.defaultRefmapName.get()
-
                     filesMatching("*.mixins.json") {
                         expand(mapOf("refmap" to refmapName))
                     }
@@ -225,33 +206,30 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         val username = project.findProperty("minecraft_username") as? String ?: "kneelawk"
         val uuid = project.findProperty("minecraft_uuid") as? String ?: "4c63e52938bd4ed5a14d77abbbe11aae"
 
-        val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
-        loomEx.runs {
-            named("client") {
-                ideConfigGenerated(true)
-                programArgs("--width", "1280", "--height", "720", "--username", username, "--uuid", uuid)
+        if (loom) {
+            val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
+            loomEx.runs {
+                named("client") {
+                    ideConfigGenerated(true)
+                    programArgs("--width", "1280", "--height", "720", "--username", username, "--uuid", uuid)
+                }
+                named("server") {
+                    ideConfigGenerated(true)
+                }
             }
-            named("server") {
-                ideConfigGenerated(true)
-            }
-        }
-    }
-
-    fun forceRemap() {
-        project.tasks.named("jar", Jar::class).configure {
-            manifest {
-                attributes("Fabric-Loom-Remap" to true)
-            }
-        }
-    }
-
-    fun disableRemap() {
-        project.tasks.apply {
-            named("remapJar", RemapJarTask::class).configure {
-                targetNamespace.set("named")
-            }
-            named("remapSourcesJar", RemapSourcesJarTask::class).configure {
-                targetNamespace.set("named")
+        } else {
+            val neoforgeEx = project.extensions.getByType(NeoForgeExtension::class)
+            neoforgeEx.runs {
+                create("client") {
+                    client()
+                    programArguments.addAll(
+                        "--width", "1280", "--height", "720", "--username", username, "--uuid", uuid
+                    )
+                }
+                create("server") {
+                    server()
+                    programArgument("--nogui")
+                }
             }
         }
     }
@@ -283,39 +261,12 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         }
     }
 
-    fun createDevExport() {
-        project.configurations.apply {
-            create("dev") {
-                isCanBeConsumed = true
-                isCanBeResolved = false
-            }
-        }
-
-        val jarExt = project.tasks.run {
-            create("jarExt", Jar::class.java) {
-                from(named("compileJava"))
-                from(named("processResources"))
-                from(project.rootProject.file("LICENSE")) {
-                    rename { "${it}_${project.rootProject.name}" }
-                }
-                archiveClassifier.set("jarExt")
-                destinationDirectory.set(project.layout.buildDirectory.dir("devlibs"))
-            }
-        }
-
-        project.artifacts.add("dev", jarExt)
-
-        project.tasks.named("assemble").configure { dependsOn(jarExt) }
-    }
-
     fun xplatProjectDependency(projectBase: String, transitive: Boolean = true, api: Boolean = true) {
         val config = if (api) "api" else "compileOnly"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
 
         project.dependencies {
             add(config, project(xplatName, configuration = "namedElements"))
-            add("testCompileOnly", project(xplatName, configuration = "namedElements"))
-            add("testRuntimeOnly", project(xplatName, configuration = "namedElements"))
         }
 
         if (transitive) {
@@ -329,11 +280,11 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         val fabricName = if (projectBase == ":") ":fabric" else "${projectBase}-fabric"
 
         project.dependencies {
-            add("compileOnly", project(xplatName, configuration = "namedElements"))
+            add("compileOnly", project(xplatName, configuration = "namedElements")) {
+                isTransitive = false
+            }
             add(config, project(fabricName, configuration = "namedElements"))
             add("include", project(fabricName))
-            add("testCompileOnly", project(xplatName, configuration = "namedElements"))
-            add("testImplementation", project(fabricName, configuration = "namedElements"))
         }
     }
 
@@ -343,13 +294,20 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         val neoforgeName = if (projectBase == ":") ":neoforge" else "${projectBase}-neoforge"
 
         project.dependencies {
-            add("compileOnly", project(xplatName, configuration = "namedElements"))
-            add(config, project(neoforgeName, configuration = "namedElements"))
-//            add("runtimeOnly", project("${projectBase}-neoforge", configuration = "dev"))
-            add("include", project(neoforgeName))
-            add("testCompileOnly", project(xplatName, configuration = "namedElements"))
-            add("testCompileOnly", project(neoforgeName, configuration = "namedElements"))
-            add("testRuntimeOnly", project(neoforgeName, configuration = "dev"))
+            if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
+                // assumes that xplat is a loom-project
+                add("compileOnly", project(xplatName, configuration = "namedElements")) {
+                    isTransitive = false
+                }
+                add(config, project(neoforgeName))
+                add("jarJar", project(neoforgeName))
+            } else {
+                add("compileOnly", project(xplatName, configuration = "namedElements")) {
+                    isTransitive = false
+                }
+                add(config, project(neoforgeName, configuration = "namedElements"))
+                add("include", project(neoforgeName))
+            }
         }
     }
 
@@ -359,7 +317,6 @@ abstract class SubmoduleExtension(private val project: Project, private val java
 
         project.dependencies {
             add(config, project(mojmapName, configuration = "namedElements"))
-            add("testCompileOnly", project(mojmapName, configuration = "namedElements"))
         }
     }
 
@@ -368,8 +325,6 @@ abstract class SubmoduleExtension(private val project: Project, private val java
 
         project.dependencies {
             add(config, getter("xplat-intermediary"))
-//            add("testModCompileOnly", getter("xplat-intermediary"))
-//            add("testModLocalRuntime", getter("xplat-intermediary"))
         }
 
         if (transitive) {
@@ -383,17 +338,20 @@ abstract class SubmoduleExtension(private val project: Project, private val java
         project.dependencies {
             add(config, getter("fabric"))
             add("include", getter("fabric"))
-//            add("testModImplementation", getter("fabric"))
         }
     }
 
     fun neoforgeExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
-        val config = if (api) "modApi" else "modImplementation"
-
         project.dependencies {
-            add(config, getter("neoforge"))
-            add("include", getter("neoforge"))
-//            add("testModImplementation", getter("neoforge"))
+            if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
+                val config = if (api) "api" else "implementation"
+                add(config, getter("neoforge"))
+                add("jarJar", getter("neoforge"))
+            } else {
+                val config = if (api) "modApi" else "modImplementation"
+                add(config, getter("neoforge"))
+                add("include", getter("neoforge"))
+            }
         }
     }
 
@@ -402,7 +360,6 @@ abstract class SubmoduleExtension(private val project: Project, private val java
 
         project.dependencies {
             add(config, getter("xplat-mojmap"))
-//            add("testModCompileOnly", getter("xplat-mojmap"))
         }
     }
 }

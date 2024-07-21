@@ -39,8 +39,21 @@ dependencies {
     val architectury_loom_version: String by project
     implementation("dev.architectury.loom:dev.architectury.loom.gradle.plugin:$architectury_loom_version")
 
+    val moddev_version: String by project
+    implementation("net.neoforged.moddev:net.neoforged.moddev.gradle.plugin:$moddev_version")
+
     val kotlin_version: String by project
     implementation("org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin:$kotlin_version")
+}
+
+tasks {
+    processResources {
+        inputs.property("version", project.version)
+        
+        filesMatching("**/plugin.properties") {
+            expand("version" to project.version)
+        }
+    }
 }
 
 gradlePlugin {
