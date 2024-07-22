@@ -119,8 +119,6 @@ abstract class SubmoduleExtension(
             val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
             val xplatLoom = xplatProject.extensions.getByType(LoomGradleExtensionAPI::class)
 
-            refmapName = loomEx.mixin.defaultRefmapName.get()
-
             if (loomEx.mods.findByName("main") != null) {
                 loomEx.mods.named("main").configure { sourceSet(mainSource.get()) }
             } else if (loomEx.mods.findByName(modId) != null) {
@@ -131,7 +129,8 @@ abstract class SubmoduleExtension(
             }
 
             if (platform != Platform.NEOFORGE) {
-                loomEx.mixin.defaultRefmapName.set(xplatLoom.mixin.defaultRefmapName)
+                refmapName = xplatLoom.mixin.defaultRefmapName.get()
+                loomEx.mixin.defaultRefmapName.set(refmapName)
             }
         }
 
