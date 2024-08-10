@@ -145,8 +145,12 @@ abstract class SubmoduleExtension(
                 Platform.XPLAT -> throw UnsupportedOperationException(
                     "Cannot apply an xplat connection from an xplat project"
                 )
-                Platform.NEOFORGE -> neoforgeProjectDependency(transitiveDep.projectBase, transitiveDep.api)
-                Platform.FABRIC -> fabricProjectDependency(transitiveDep.projectBase, transitiveDep.api)
+                Platform.NEOFORGE -> neoforgeProjectDependency(
+                    transitiveDep.projectBase, transitiveDep.api, transitiveDep.include
+                )
+                Platform.FABRIC -> fabricProjectDependency(
+                    transitiveDep.projectBase, transitiveDep.api, transitiveDep.include
+                )
                 Platform.MOJMAP -> mojmapProjectDependency(transitiveDep.projectBase, transitiveDep.api)
             }
         }
@@ -156,8 +160,12 @@ abstract class SubmoduleExtension(
                 Platform.XPLAT -> throw UnsupportedOperationException(
                     "Cannot apply an xplat connection from an xplat project"
                 )
-                Platform.NEOFORGE -> neoforgeExternalDependency(transitiveDep.api, transitiveDep.getter)
-                Platform.FABRIC -> fabricExternalDependency(transitiveDep.api, transitiveDep.getter)
+                Platform.NEOFORGE -> neoforgeExternalDependency(
+                    transitiveDep.api, transitiveDep.include, transitiveDep.getter
+                )
+                Platform.FABRIC -> fabricExternalDependency(
+                    transitiveDep.api, transitiveDep.include, transitiveDep.getter
+                )
                 Platform.MOJMAP -> mojmapExternalDependency(transitiveDep.api, transitiveDep.getter)
             }
         }
@@ -260,7 +268,9 @@ abstract class SubmoduleExtension(
         }
     }
 
-    fun xplatProjectDependency(projectBase: String, transitive: Boolean = true, api: Boolean = true) {
+    fun xplatProjectDependency(
+        projectBase: String, transitive: Boolean = true, api: Boolean = true, include: Boolean = true
+    ) {
         val config = if (api) "api" else "compileOnly"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
 
@@ -269,11 +279,11 @@ abstract class SubmoduleExtension(
         }
 
         if (transitive) {
-            transitiveProjectDependencies.add(ProjectDep(projectBase, api))
+            transitiveProjectDependencies.add(ProjectDep(projectBase, api, include))
         }
     }
 
-    fun fabricProjectDependency(projectBase: String, api: Boolean = true) {
+    fun fabricProjectDependency(projectBase: String, api: Boolean = true, include: Boolean = true) {
         val config = if (api) "api" else "implementation"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
         val fabricName = if (projectBase == ":") ":fabric" else "${projectBase}-fabric"
@@ -283,11 +293,11 @@ abstract class SubmoduleExtension(
                 isTransitive = false
             }
             add(config, project(fabricName, configuration = "namedElements"))
-            add("include", project(fabricName))
+            if (include) add("include", project(fabricName))
         }
     }
 
-    fun neoforgeProjectDependency(projectBase: String, api: Boolean = true) {
+    fun neoforgeProjectDependency(projectBase: String, api: Boolean = true, include: Boolean = true) {
         val config = if (api) "api" else "implementation"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
         val neoforgeName = if (projectBase == ":") ":neoforge" else "${projectBase}-neoforge"
@@ -299,13 +309,13 @@ abstract class SubmoduleExtension(
                     isTransitive = false
                 }
                 add(config, project(neoforgeName))
-                add("jarJar", project(neoforgeName))
+                if (include) add("jarJar", project(neoforgeName))
             } else {
                 add("compileOnly", project(xplatName, configuration = "namedElements")) {
                     isTransitive = false
                 }
                 add(config, project(neoforgeName, configuration = "namedElements"))
-                add("include", project(neoforgeName))
+                if (include) add("include", project(neoforgeName))
             }
         }
     }
@@ -319,7 +329,9 @@ abstract class SubmoduleExtension(
         }
     }
 
-    fun xplatExternalDependency(transitive: Boolean = true, api: Boolean = true, getter: (platform: String) -> String) {
+    fun xplatExternalDependency(
+        transitive: Boolean = true, api: Boolean = true, include: Boolean = true, getter: (platform: String) -> String
+    ) {
         val config = if (api) "modApi" else "modCompileOnly"
 
         project.dependencies {
@@ -327,11 +339,11 @@ abstract class SubmoduleExtension(
         }
 
         if (transitive) {
-            transitiveExternalDependencies.add(ExternalDep(getter, api))
+            transitiveExternalDependencies.add(ExternalDep(getter, api, include))
         }
     }
 
-    fun fabricExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
+    fun fabricExternalDependency(api: Boolean = true, include: Boolean = true, getter: (platform: String) -> String) {
         val config = if (api) "modApi" else "modImplementation"
 
         project.dependencies {
@@ -340,7 +352,7 @@ abstract class SubmoduleExtension(
         }
     }
 
-    fun neoforgeExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
+    fun neoforgeExternalDependency(api: Boolean = true, include: Boolean = true, getter: (platform: String) -> String) {
         project.dependencies {
             if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
                 val config = if (api) "api" else "implementation"
