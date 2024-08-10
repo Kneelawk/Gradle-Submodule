@@ -132,6 +132,11 @@ abstract class SubmoduleExtension(
                 refmapName = xplatLoom.mixin.defaultRefmapName.get()
                 loomEx.mixin.defaultRefmapName.set(refmapName)
             }
+        } else if (platform == Platform.NEOFORGE) {
+            val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
+            neoforgeEx.mods.named(modId) {
+                sourceSet(mainSource.get())
+            }
         }
 
         project.dependencies {
@@ -269,7 +274,8 @@ abstract class SubmoduleExtension(
     }
 
     fun xplatProjectDependency(
-        projectBase: String, transitive: Boolean = true, api: Boolean = true, include: Boolean = true
+        projectBase: String, transitive: Boolean = true, api: Boolean = true, include: Boolean = true,
+        addMods: Boolean = true
     ) {
         val config = if (api) "api" else "compileOnly"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
@@ -279,7 +285,7 @@ abstract class SubmoduleExtension(
         }
 
         if (transitive) {
-            transitiveProjectDependencies.add(ProjectDep(projectBase, api, include))
+            transitiveProjectDependencies.add(ProjectDep(projectBase, api, include, addMods))
         }
     }
 
@@ -297,7 +303,9 @@ abstract class SubmoduleExtension(
         }
     }
 
-    fun neoforgeProjectDependency(projectBase: String, api: Boolean = true, include: Boolean = true) {
+    fun neoforgeProjectDependency(
+        projectBase: String, api: Boolean = true, include: Boolean = true, addMods: Boolean = true
+    ) {
         val config = if (api) "api" else "implementation"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
         val neoforgeName = if (projectBase == ":") ":neoforge" else "${projectBase}-neoforge"
@@ -316,6 +324,16 @@ abstract class SubmoduleExtension(
                 }
                 add(config, project(neoforgeName, configuration = "namedElements"))
                 if (include) add("include", project(neoforgeName))
+            }
+        }
+
+        if (addMods && platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
+            val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
+            val depProject = project.project(neoforgeName)
+            val depSubmodule = depProject.extensions.getByType<SubmoduleExtension>()
+
+            neoforgeEx.mods.create(depSubmodule.modId) {
+                dependency(depProject)
             }
         }
     }

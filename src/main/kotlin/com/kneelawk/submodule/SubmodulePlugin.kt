@@ -257,7 +257,7 @@ class SubmodulePlugin : Plugin<Project> {
             }
         } else if (platform == Platform.NEOFORGE) {
             // do moddev stuff
-            val neoforgeEx = project.extensions.getByType(NeoForgeExtension::class)
+            val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
 
             neoforgeEx.version.set(project.getProperty<String>("neoforge_version"))
 
