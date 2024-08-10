@@ -329,7 +329,7 @@ abstract class SubmoduleExtension(
 
         if (addMods && platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
             val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
-            val depProject = project.project(neoforgeName)
+            val depProject = project.evaluationDependsOn(neoforgeName)
             val depSubmodule = depProject.extensions.getByType<SubmoduleExtension>()
 
             neoforgeEx.mods.create(depSubmodule.modId) {
