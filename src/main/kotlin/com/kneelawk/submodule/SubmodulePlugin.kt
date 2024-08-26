@@ -386,7 +386,10 @@ class SubmodulePlugin : Plugin<Project> {
             }
 
             named("test", Test::class.java).configure {
-                useJUnit()
+                useJUnitPlatform()
+
+                maxHeapSize = "1G"
+
                 testLogging {
                     events("passed", "skipped", "failed")
                 }
