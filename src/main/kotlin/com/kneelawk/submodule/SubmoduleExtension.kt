@@ -331,9 +331,10 @@ abstract class SubmoduleExtension(
             val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
             val depProject = project.evaluationDependsOn(neoforgeName)
             val depSubmodule = depProject.extensions.getByType<SubmoduleExtension>()
+            val depSourceSet = depProject.extensions.getByType<SourceSetContainer>()
 
             neoforgeEx.mods.create(depSubmodule.modId) {
-                dependency(depProject)
+                sourceSet(depSourceSet.named("main").get())
             }
         }
     }
