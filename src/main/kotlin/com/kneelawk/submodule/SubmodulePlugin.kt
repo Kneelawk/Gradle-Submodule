@@ -35,6 +35,7 @@ import org.gradle.api.Project
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.bundling.AbstractArchiveTask
 import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
@@ -393,6 +394,12 @@ class SubmodulePlugin : Plugin<Project> {
                 testLogging {
                     events("passed", "skipped", "failed")
                 }
+            }
+
+            // make builds reproducible
+            withType<AbstractArchiveTask>().configureEach {
+                isPreserveFileTimestamps = false
+                isReproducibleFileOrder = true
             }
         }
 
