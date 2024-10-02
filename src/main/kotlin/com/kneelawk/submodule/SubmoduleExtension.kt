@@ -135,7 +135,8 @@ abstract class SubmoduleExtension(
         } else if (platform == Platform.NEOFORGE) {
             val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
             neoforgeEx.mods.named(modId) {
-                sourceSet(mainSource.get())
+                // this seems to be breaking mixins
+//                sourceSet(mainSource.get())
             }
         }
 
@@ -367,7 +368,7 @@ abstract class SubmoduleExtension(
 
         project.dependencies {
             add(config, getter("fabric"))
-            add("include", getter("fabric"))
+            if (include) add("include", getter("fabric"))
         }
     }
 
@@ -376,11 +377,11 @@ abstract class SubmoduleExtension(
             if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
                 val config = if (api) "api" else "implementation"
                 add(config, getter("neoforge"))
-                add("jarJar", getter("neoforge"))
+                if (include) add("jarJar", getter("neoforge"))
             } else {
                 val config = if (api) "modApi" else "modImplementation"
                 add(config, getter("neoforge"))
-                add("include", getter("neoforge"))
+                if (include) add("include", getter("neoforge"))
             }
         }
     }
