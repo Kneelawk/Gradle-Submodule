@@ -44,6 +44,8 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.*
 import org.gradle.language.jvm.tasks.ProcessResources
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.gradle.utils.extendsFrom
 import java.net.HttpURLConnection
 import java.net.URI
@@ -99,6 +101,8 @@ class SubmodulePlugin : Plugin<Project> {
             else -> throw IllegalArgumentException("Unrecognized submodule.mode: $submoduleModeStr")
         }
 
+        val kotlin = project.getProperty<String>("submodule.kotlin").toBoolean()
+
         // apply plugins
         val loom: Boolean
         if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
@@ -113,9 +117,12 @@ class SubmodulePlugin : Plugin<Project> {
                 loom = true
             }
         }
+        if (kotlin) {
+            project.plugins.apply("org.jetbrains.kotlin.jvm")
+        }
 
         project.extensions.create(
-            "submodule", SubmoduleExtension::class, project, javaVersion, platform, submoduleMode, modId
+            "submodule", SubmoduleExtension::class, project, platform, submoduleMode, modId, kotlin
         )
 
         val mavenGroup = project.getProperty<String>("maven_group")
@@ -200,6 +207,13 @@ class SubmodulePlugin : Plugin<Project> {
                         val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
                         add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
                         add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
+
+                        if (kotlin) {
+                            add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                            add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                        }
                     }
                     Platform.FABRIC -> {
                         val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
@@ -209,10 +223,22 @@ class SubmodulePlugin : Plugin<Project> {
                         val fapiVersion = project.getProperty<String>("fapi_version")
                         add("modCompileOnly", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
                         add("modLocalRuntime", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
+
+                        if (kotlin) {
+                            val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
+                            add("modCompileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                            add("modLocalRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                        }
                     }
                     Platform.NEOFORGE -> {
                         val neoforgeVersion = project.getProperty<String>("neoforge_version")
                         add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
+
+                        if (kotlin) {
+                            val kotlinVersion = project.getProperty<String>("fabric_kotlin_version")
+                            add("modCompileOnly", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
+                            add("modLocalRuntime", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
+                        }
                     }
                 }
             }
@@ -306,6 +332,12 @@ class SubmodulePlugin : Plugin<Project> {
             named("sourcesJar", Jar::class.java).configure {
                 from(project.rootProject.file("LICENSE")) {
                     rename { "${it}_${project.rootProject.name}" }
+                }
+            }
+
+            if (kotlin) {
+                withType<KotlinCompile>().configureEach {
+                    compilerOptions.jvmTarget.set(JvmTarget.fromTarget(javaVersion))
                 }
             }
 

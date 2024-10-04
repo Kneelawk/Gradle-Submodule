@@ -37,48 +37,16 @@ import org.gradle.external.javadoc.StandardJavadocDocletOptions
 import org.gradle.jvm.tasks.Jar
 import org.gradle.kotlin.dsl.*
 import org.gradle.language.jvm.tasks.ProcessResources
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 abstract class SubmoduleExtension(
-    private val project: Project, private val javaVersion: String, private val platform: Platform,
-    private val submoduleMode: SubmoduleMode, private val modId: String
+    private val project: Project, private val platform: Platform,
+    private val submoduleMode: SubmoduleMode, private val modId: String, private val usingKotlin: Boolean
 ) {
     private val loom = submoduleMode == SubmoduleMode.ARCHITECTURY || platform != Platform.NEOFORGE
-    private var usingKotlin = false
     private lateinit var xplatName: String
     private val transitiveProjectDependencies = mutableListOf<ProjectDep>()
     private val transitiveExternalDependencies = mutableListOf<ExternalDep>()
-
-    fun applyKotlin(platform: String) {
-        usingKotlin = true
-        project.plugins.apply("org.jetbrains.kotlin.jvm")
-
-        project.tasks.withType<KotlinCompile>().configureEach {
-            compilerOptions.jvmTarget.set(JvmTarget.fromTarget(javaVersion))
-        }
-
-        project.dependencies {
-            when (platform) {
-                "xplat", "mojmap" -> {
-                    add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-                    add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-                    add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-                    add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-                }
-                "neoforge" -> {
-                    val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
-                    add("modCompileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
-                    add("modLocalRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
-                }
-                "fabric" -> {
-                    val kotlinVersion = project.getProperty<String>("fabric_kotlin_version")
-                    add("modCompileOnly", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
-                    add("modLocalRuntime", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
-                }
-            }
-        }
-    }
 
     fun setLibsDirectory() {
         val baseEx = project.extensions.getByType(BasePluginExtension::class)
