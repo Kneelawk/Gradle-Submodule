@@ -101,7 +101,7 @@ class SubmodulePlugin : Plugin<Project> {
             else -> throw IllegalArgumentException("Unrecognized submodule.mode: $submoduleModeStr")
         }
 
-        val kotlin = project.getProperty<String>("submodule.kotlin").toBoolean()
+        val kotlin = project.findProperty("submodule.kotlin").toString().toBoolean()
 
         // apply plugins
         val loom: Boolean
