@@ -216,12 +216,8 @@ class SubmodulePlugin : Plugin<Project> {
                         if (kotlin) {
                             add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
                             add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
                             add("localRuntime", "org.jetbrains.kotlin:kotlin-stdlib")
                             add("localRuntime", "org.jetbrains.kotlin:kotlin-reflect")
-                            add("testLocalRuntime", "org.jetbrains.kotlin:kotlin-stdlib")
-                            add("testLocalRuntime", "org.jetbrains.kotlin:kotlin-reflect")
                         }
                     }
                     Platform.FABRIC -> {
