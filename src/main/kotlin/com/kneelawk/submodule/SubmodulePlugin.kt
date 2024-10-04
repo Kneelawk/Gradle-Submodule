@@ -208,12 +208,13 @@ class SubmodulePlugin : Plugin<Project> {
                         add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
                         add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
 
-                        if (kotlin) {
-                            add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-                            add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-                        }
+                        // seems to break things
+//                        if (kotlin) {
+//                            add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+//                            add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+//                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+//                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+//                        }
                     }
                     Platform.FABRIC -> {
                         val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
