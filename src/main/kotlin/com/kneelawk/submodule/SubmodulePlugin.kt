@@ -142,6 +142,11 @@ class SubmodulePlugin : Plugin<Project> {
         project.configurations {
             named("testCompileClasspath").extendsFrom(named("compileClasspath"))
             named("testRuntimeClasspath").extendsFrom(named("runtimeClasspath"))
+            
+            if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
+                create("localRuntime")
+                named("runtimeClasspath").extendsFrom(named("localRuntime"))
+            }
         }
 
         project.repositories {
@@ -208,13 +213,12 @@ class SubmodulePlugin : Plugin<Project> {
                         add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
                         add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
 
-                        // seems to break things
-//                        if (kotlin) {
-//                            add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-//                            add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-//                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-//                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-//                        }
+                        if (kotlin) {
+                            add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                            add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                            add("testCompileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                        }
                     }
                     Platform.FABRIC -> {
                         val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
@@ -226,9 +230,9 @@ class SubmodulePlugin : Plugin<Project> {
                         add("modLocalRuntime", "net.fabricmc.fabric-api:fabric-api:$fapiVersion")
 
                         if (kotlin) {
-                            val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
-                            add("modCompileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
-                            add("modLocalRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                            val kotlinVersion = project.getProperty<String>("fabric_kotlin_version")
+                            add("modCompileOnly", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
+                            add("modLocalRuntime", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
                         }
                     }
                     Platform.NEOFORGE -> {
@@ -236,11 +240,17 @@ class SubmodulePlugin : Plugin<Project> {
                         add("neoForge", "net.neoforged:neoforge:$neoforgeVersion")
 
                         if (kotlin) {
-                            val kotlinVersion = project.getProperty<String>("fabric_kotlin_version")
-                            add("modCompileOnly", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
-                            add("modLocalRuntime", "net.fabricmc:fabric-language-kotlin:$kotlinVersion")
+                            val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
+                            add("modCompileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                            add("modLocalRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
                         }
                     }
+                }
+            } else if (platform == Platform.NEOFORGE) {
+                if (kotlin) {
+                    val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
+                    add("compileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                    add("localRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
                 }
             }
 
