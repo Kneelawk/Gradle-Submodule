@@ -184,15 +184,25 @@ abstract class SubmoduleExtension(
     }
 
     fun generateRuns() {
-        val username = project.findProperty("minecraft_username") as? String ?: "kneelawk"
-        val uuid = project.findProperty("minecraft_uuid") as? String ?: "4c63e52938bd4ed5a14d77abbbe11aae"
+        val width = project.findProperty("minecraft_width") as? String
+        val height = project.findProperty("minecraft_height") as? String
+        val username = project.findProperty("minecraft_username") as? String
+        val uuid = project.findProperty("minecraft_uuid") as? String
+
+        val args = mutableListOf<String>()
+        if (width != null && height != null) {
+            args += listOf("--width", width, "--height", height)
+        }
+        if (username != null && uuid != null) {
+            args += listOf("--username", username, "--uuid", uuid)
+        }
 
         if (loom) {
             val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
             loomEx.runs {
                 named("client") {
                     ideConfigGenerated(true)
-                    programArgs("--width", "1280", "--height", "720", "--username", username, "--uuid", uuid)
+                    programArgs(args)
                 }
                 named("server") {
                     ideConfigGenerated(true)
@@ -203,9 +213,7 @@ abstract class SubmoduleExtension(
             neoforgeEx.runs {
                 create("client") {
                     client()
-                    programArguments.addAll(
-                        "--width", "1280", "--height", "720", "--username", username, "--uuid", uuid
-                    )
+                    programArguments.addAll(args)
                 }
                 create("server") {
                     server()
