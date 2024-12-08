@@ -418,7 +418,7 @@ class SubmodulePlugin : Plugin<Project> {
                             if (platform == Platform.NEOFORGE) {
                                 val neoforgeVersion = project.getProperty<String>("neoforge_version")
                                 listOf(
-                                    "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-vanilla-moddev/${neoforgeVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
+                                    "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-neoforge-moddev/${neoforgeVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
                                 )
                             } else {
                                 listOf(
