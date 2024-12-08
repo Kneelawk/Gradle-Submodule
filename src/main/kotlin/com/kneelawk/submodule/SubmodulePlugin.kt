@@ -142,7 +142,7 @@ class SubmodulePlugin : Plugin<Project> {
         project.configurations {
             named("testCompileClasspath").extendsFrom(named("compileClasspath"))
             named("testRuntimeClasspath").extendsFrom(named("runtimeClasspath"))
-            
+
             if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
                 create("localRuntime")
                 named("runtimeClasspath").extendsFrom(named("localRuntime"))
@@ -397,9 +397,39 @@ class SubmodulePlugin : Plugin<Project> {
                         val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
                         val parchmentVersion = project.getProperty<String>("parchment_version")
                         val javadocBuild = project.findProperty("javadoc_build") as? String ?: "1"
-                        listOf(
-                            "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-vanilla-loom/${minecraftVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
-                        )
+                        val javadocSource = project.findProperty("javadoc_source") as? String ?: run {
+                            val pieces = minecraftVersion.split('.')
+                            val major = pieces[1].toIntOrNull()
+                            val minor = pieces.getOrNull(2)?.toIntOrNull()
+                            if (major != null) {
+                                if (major < 21) {
+                                    return@run "loom"
+                                } else if (major == 21 && minor == null) {
+                                    return@run "loom"
+                                } else if (minor != null && minor < 2) {
+                                    return@run "loom"
+                                }
+                            }
+
+                            return@run "moddev"
+                        }
+
+                        if (javadocSource == "moddev") {
+                            if (platform == Platform.NEOFORGE) {
+                                val neoforgeVersion = project.getProperty<String>("neoforge_version")
+                                listOf(
+                                    "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-vanilla-moddev/${neoforgeVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
+                                )
+                            } else {
+                                listOf(
+                                    "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-vanilla-moddev/${minecraftVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
+                                )
+                            }
+                        } else {
+                            listOf(
+                                "https://maven.kneelawk.com/javadoc/releases/com/kneelawk/javadoc-mc/javadoc-mc-mojmap-vanilla-loom/${minecraftVersion}+parchment.${parchmentMcVersion}-${parchmentVersion}-build.${javadocBuild}/raw/"
+                            )
+                        }
                     }
                     "yarn" -> {
                         val yarnVersion = project.getProperty<String>("yarn_version")
