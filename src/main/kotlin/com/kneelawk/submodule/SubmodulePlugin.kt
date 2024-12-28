@@ -44,12 +44,15 @@ import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.*
 import org.gradle.language.jvm.tasks.ProcessResources
+import org.jetbrains.kotlin.com.google.gson.JsonParser
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.gradle.utils.extendsFrom
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.util.Properties
+import java.util.TreeSet
 
 class SubmodulePlugin : Plugin<Project> {
     companion object {
@@ -98,23 +101,50 @@ class SubmodulePlugin : Plugin<Project> {
         val submoduleMode = when (submoduleModeStr.lowercase()) {
             "platform" -> SubmoduleMode.PLATFORM
             "architectury", "arch" -> SubmoduleMode.ARCHITECTURY
-            else -> throw IllegalArgumentException("Unrecognized submodule.mode: $submoduleModeStr")
+            else -> throw IllegalArgumentException(
+                "Unrecognized submodule.mode '$submoduleModeStr'. Supported modes are 'platform' (default) and 'architectury'."
+            )
+        }
+
+        val xplatModeStr = project.findProperty("submodule.xplat.mode") as? String ?: "moddev"
+        val xplatMode = when (xplatModeStr.lowercase()) {
+            "loom" -> XplatMode.LOOM
+            "moddev" -> XplatMode.MODDEV
+            else -> throw IllegalArgumentException(
+                "Unrecognized submodule.xplat.mode '$xplatModeStr'. Supported modes are 'loom' and 'moddev' (default)."
+            )
         }
 
         val kotlin = project.findProperty("submodule.kotlin").toString().toBoolean()
 
+        val neoformVersion = project.findProperty("neoform_version")
+
         // apply plugins
         val loom: Boolean
+        val moddev: Boolean
         if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
             project.plugins.apply("dev.architectury.loom")
             loom = true
+            moddev = false
         } else {
             if (platform == Platform.NEOFORGE) {
                 project.plugins.apply("net.neoforged.moddev")
                 loom = false
+                moddev = true
+            } else if (platform == Platform.XPLAT) {
+                if (xplatMode == XplatMode.MODDEV) {
+                    project.plugins.apply("net.neoforged.moddev")
+                    loom = false
+                    moddev = true
+                } else {
+                    project.plugins.apply("fabric-loom")
+                    loom = true
+                    moddev = false
+                }
             } else {
                 project.plugins.apply("fabric-loom")
                 loom = true
+                moddev = false
             }
         }
         if (kotlin) {
@@ -122,7 +152,7 @@ class SubmodulePlugin : Plugin<Project> {
         }
 
         project.extensions.create(
-            "submodule", SubmoduleExtension::class, project, platform, submoduleMode, modId, kotlin
+            "submodule", SubmoduleExtension::class, project, platform, submoduleMode, xplatMode, modId, kotlin
         )
 
         val mavenGroup = project.getProperty<String>("maven_group")
@@ -246,6 +276,22 @@ class SubmodulePlugin : Plugin<Project> {
                         }
                     }
                 }
+            } else if (platform == Platform.XPLAT) {
+                val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
+                val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
+
+                add("compileOnly", "net.fabricmc:sponge-mixin:$mixinVersion")
+
+                // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
+                add("compileOnly", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+                add("annotationProcessor", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+
+                if (kotlin) {
+                    add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                    add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                    add("localRuntime", "org.jetbrains.kotlin:kotlin-stdlib")
+                    add("localRuntime", "org.jetbrains.kotlin:kotlin-reflect")
+                }
             } else if (platform == Platform.NEOFORGE) {
                 if (kotlin) {
                     val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
@@ -293,11 +339,19 @@ class SubmodulePlugin : Plugin<Project> {
                     }
                 }
             }
-        } else if (platform == Platform.NEOFORGE) {
+        } else if (moddev) {
             // do moddev stuff
             val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
 
-            neoforgeEx.version.set(project.getProperty<String>("neoforge_version"))
+            if (platform == Platform.NEOFORGE) {
+                neoforgeEx.version.set(project.getProperty<String>("neoforge_version"))
+            } else if (platform == Platform.XPLAT) {
+                val minecraftVersion = project.getProperty<String>("minecraft_version")
+                val neoFormVersion =
+                    project.findProperty("neoform_version") as? String ?: getNeoFormVersion(project, minecraftVersion)
+
+                neoforgeEx.neoFormVersion.set(neoFormVersion)
+            }
 
             neoforgeEx.parchment {
                 mappingsVersion.set(project.getProperty<String>("parchment_version"))
@@ -481,6 +535,57 @@ class SubmodulePlugin : Plugin<Project> {
         }
     }
 
+    private val neoformVersionRegex = Regex("""^(?<mc>[a-z0-9.\-]+)-(?<date>\d+)\.(?<time>\d+)$""")
+    private fun getNeoFormVersion(project: Project, minecraftVersion: String): String {
+        val cacheFile = project.file(".gradle/neoform-version-cache/${minecraftVersion}.txt")
+        try {
+            if (cacheFile.exists()) {
+                val versionStr = cacheFile.readText().trim()
+                println("Found cached NeoForm version: $versionStr")
+                println("If any error occurs, try deleting '.gradle/neoform-version-cache/${minecraftVersion}.txt'")
+                return versionStr
+            }
+        } catch (e: Exception) {
+            // if anything goes wrong, we try re-downloading the file
+        }
+
+        println("Unable to read cached NeoForm version, downloading index...")
+        try {
+            val url = URI("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoform").toURL()
+            val text = url.openStream().use { it.bufferedReader().readText() }
+            val json = JsonParser.parseString(text)
+
+            val versions = mutableMapOf<String, TreeSet<NeoFormVersion>>()
+
+            val versionsJson = json.asJsonObject.getAsJsonArray("versions")
+            for (versionElem in versionsJson) {
+                val versionStr = versionElem.asString
+                val match = neoformVersionRegex.matchEntire(versionStr)
+                if (match != null) {
+                    val groups = match.groups
+                    val mc = groups["mc"]?.value ?: continue
+                    val date = groups["date"]?.value ?: continue
+                    val time = groups["time"]?.value ?: continue
+                    val version = NeoFormVersion(mc, date.toInt(), time.toInt())
+                    versions.computeIfAbsent(mc) { TreeSet() }.add(version)
+                }
+            }
+
+            val versionSet = versions.get(minecraftVersion) ?: throw IllegalStateException(
+                "NeoForm does not exist for the minecraft version '$minecraftVersion'"
+            )
+            val version = versionSet.last
+
+            val versionStr = version.toString()
+            println("Using re-indexed NeoForm version: $versionStr")
+            cacheFile.writeText(versionStr)
+
+            return versionStr
+        } catch (e: Exception) {
+            throw IOException("Error getting neoform version for minecraft $minecraftVersion", e)
+        }
+    }
+
     private fun filterConnectable(links: List<String>): List<String> {
         return links.filter { link ->
             val link2 = if (link.endsWith('/')) link else "$link/"
@@ -503,6 +608,33 @@ class SubmodulePlugin : Plugin<Project> {
             return text.isNotEmpty()
         } catch (e: Exception) {
             return false
+        }
+    }
+
+    data class NeoFormVersion(val minecraft: String, val date: Int, val time: Int) :
+        Comparable<NeoFormVersion> {
+        override fun toString() = "${minecraft}-${date}.${time}"
+
+        override fun compareTo(other: NeoFormVersion): Int {
+            val c = date.compareTo(other.date)
+            if (c != 0) return c
+            return time.compareTo(other.time)
+        }
+
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (other !is NeoFormVersion) return false
+
+            if (date != other.date) return false
+            if (time != other.time) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = date
+            result = 31 * result + time
+            return result
         }
     }
 }
