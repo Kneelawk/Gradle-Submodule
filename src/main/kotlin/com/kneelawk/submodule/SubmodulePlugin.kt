@@ -68,7 +68,7 @@ class SubmodulePlugin : Plugin<Project> {
         val pluginVersion: String by props
         println("Submodule version: $pluginVersion")
 
-        project.plugins.apply("org.gradle.java-library")
+        project.apply(plugin = "org.gradle.java-library")
 
         val baseEx = project.extensions.getByType(BasePluginExtension::class)
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
@@ -106,19 +106,19 @@ class SubmodulePlugin : Plugin<Project> {
         // apply plugins
         val loom: Boolean
         if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
-            project.plugins.apply("dev.architectury.loom")
+            project.apply(plugin = "dev.architectury.loom")
             loom = true
         } else {
             if (platform == Platform.NEOFORGE) {
-                project.plugins.apply("net.neoforged.moddev")
+                project.apply(plugin = "net.neoforged.moddev")
                 loom = false
             } else {
-                project.plugins.apply("fabric-loom")
+                project.apply(plugin = "fabric-loom")
                 loom = true
             }
         }
         if (kotlin) {
-            project.plugins.apply("org.jetbrains.kotlin.jvm")
+            project.apply(plugin = "org.jetbrains.kotlin.jvm")
         }
 
         project.extensions.create(
@@ -297,7 +297,7 @@ class SubmodulePlugin : Plugin<Project> {
             // do moddev stuff
             val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
 
-            neoforgeEx.version.set(project.getProperty<String>("neoforge_version"))
+            neoforgeEx.version = project.getProperty<String>("neoforge_version")
 
             neoforgeEx.parchment {
                 mappingsVersion.set(project.getProperty<String>("parchment_version"))
