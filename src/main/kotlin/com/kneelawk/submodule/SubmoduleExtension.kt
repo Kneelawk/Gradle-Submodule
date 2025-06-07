@@ -74,24 +74,45 @@ abstract class SubmoduleExtension(
     private val transitiveProjectDependencies = mutableListOf<ProjectDep>()
     private val transitiveExternalDependencies = mutableListOf<ExternalDep>()
 
+    var expansions = mapOf<String, Any>()
+    var metadataFiles = setOf<String>()
+
     fun setLibsDirectory() {
         val baseEx = project.extensions.getByType(BasePluginExtension::class)
         baseEx.libsDirectory.set(project.rootProject.layout.buildDirectory.dir("libs"))
     }
 
-    fun setRefmaps(basename: String) {
-        if (loom) {
-            refmapName = "${basename}.refmap.json"
+    /**
+     * Mixin expansions are also applied when applying an xplat connection.
+     */
+    fun applyMixinExpansions(refmapBasename: String) {
+        refmapName = "${refmapBasename}.refmap.json"
 
+        if (loom) {
             val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
             loomEx.mixin.defaultRefmapName.set(refmapName)
+        }
 
-            project.tasks.named("processResources", ProcessResources::class).configure {
+        project.tasks.named("processResources", ProcessResources::class).configure {
+            if (loom && platform != Platform.NEOFORGE) {
+                val properties = mapOf("refmap" to refmapName) + expansions
+
                 filesMatching("*.mixins.json") {
-                    expand(mapOf("refmap" to refmapName))
+                    expand(properties)
                 }
 
-                inputs.property("refmap", refmapName)
+                inputs.properties(properties)
+            } else {
+                val properties = expansions
+
+                exclude("fabric.mod.json")
+
+                filesMatching("*.mixins.json") {
+                    filter { if (it.contains("refmap")) "" else it }
+                    expand(properties)
+                }
+
+                inputs.properties(properties)
             }
         }
     }
@@ -172,17 +193,24 @@ abstract class SubmoduleExtension(
                 from(mainSource.map { it.resources })
 
                 if (loom && platform != Platform.NEOFORGE) {
+                    val properties = mapOf("refmap" to refmapName) + expansions
+
                     filesMatching("*.mixins.json") {
-                        expand(mapOf("refmap" to refmapName))
+                        expand(properties)
                     }
 
-                    inputs.property("refmap", refmapName)
+                    inputs.properties(properties)
                 } else {
+                    val properties = expansions
+
                     exclude("fabric.mod.json")
 
                     filesMatching("*.mixins.json") {
                         filter { if (it.contains("refmap")) "" else it }
+                        expand(properties)
                     }
+
+                    inputs.properties(properties)
                 }
             }
 

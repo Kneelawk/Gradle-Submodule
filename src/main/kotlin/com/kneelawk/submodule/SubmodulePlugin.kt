@@ -56,7 +56,7 @@ import java.util.TreeSet
 
 class SubmodulePlugin : Plugin<Project> {
     companion object {
-        private val metadataFiles = listOf(
+        private val metadataFiles = setOf(
             "quilt.mod.json",
             "fabric.mod.json",
             "META-INF/mods.toml",
@@ -151,7 +151,7 @@ class SubmodulePlugin : Plugin<Project> {
             project.apply(plugin = "org.jetbrains.kotlin.jvm")
         }
 
-        project.extensions.create(
+        val subExt = project.extensions.create(
             "submodule", SubmoduleExtension::class, project, platform, submoduleMode, xplatMode, modId, kotlin
         )
 
@@ -173,7 +173,7 @@ class SubmodulePlugin : Plugin<Project> {
             named("testCompileClasspath").extendsFrom(named("compileClasspath"))
             named("testRuntimeClasspath").extendsFrom(named("runtimeClasspath"))
 
-            if (platform == Platform.NEOFORGE && submoduleMode == SubmoduleMode.PLATFORM) {
+            if (moddev) {
                 create("localRuntime")
                 named("runtimeClasspath").extendsFrom(named("localRuntime"))
             }
@@ -276,7 +276,7 @@ class SubmodulePlugin : Plugin<Project> {
                         }
                     }
                 }
-            } else if (platform == Platform.XPLAT) {
+            } else if (moddev && platform == Platform.XPLAT) {
                 val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
                 val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
 
@@ -292,7 +292,7 @@ class SubmodulePlugin : Plugin<Project> {
                     add("localRuntime", "org.jetbrains.kotlin:kotlin-stdlib")
                     add("localRuntime", "org.jetbrains.kotlin:kotlin-reflect")
                 }
-            } else if (platform == Platform.NEOFORGE) {
+            } else if (moddev && platform == Platform.NEOFORGE) {
                 if (kotlin) {
                     val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
                     add("compileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
@@ -366,22 +366,6 @@ class SubmodulePlugin : Plugin<Project> {
         }
 
         project.tasks {
-            named("processResources", ProcessResources::class.java).configure {
-                val properties = mapOf(
-                    "version" to project.version,
-                    "mod_id" to modId
-                )
-
-                inputs.properties(properties)
-
-                filesMatching(metadataFiles) {
-                    expand(properties)
-                }
-
-                exclude("**/*.xcf")
-                exclude("**/*.bbmodel")
-            }
-
             withType<JavaCompile>().configureEach {
                 options.encoding = "UTF-8"
                 options.release.set(javaVersion.toInt())
@@ -531,7 +515,25 @@ class SubmodulePlugin : Plugin<Project> {
         }
 
         project.afterEvaluate {
-            tasks.findByName("genSources")?.apply { setDependsOn(listOf("genSourcesWithVineflower")) }
+            tasks {
+                named("processResources", ProcessResources::class.java).configure {
+                    val properties = mapOf(
+                        "version" to project.version,
+                        "mod_id" to modId
+                    ) + subExt.expansions
+
+                    inputs.properties(properties)
+
+                    filesMatching(metadataFiles + subExt.metadataFiles) {
+                        expand(properties)
+                    }
+
+                    exclude("**/*.xcf")
+                    exclude("**/*.bbmodel")
+                }
+
+                findByName("genSources")?.apply { setDependsOn(listOf("genSourcesWithVineflower")) }
+            }
         }
     }
 
