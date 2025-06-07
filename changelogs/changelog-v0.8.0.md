@@ -1,4 +1,3 @@
 Changes:
 
-* Switched the `xplat` module over to using ModDev by default, meaning that the `xplat` module is now published in
-  `mojmap` and a separate `intermediary` module is required.
+* Updated required loom version to 1.10 and moddev version 2.0.80.

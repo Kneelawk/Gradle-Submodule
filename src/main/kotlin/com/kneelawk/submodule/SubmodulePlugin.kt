@@ -71,7 +71,7 @@ class SubmodulePlugin : Plugin<Project> {
         val pluginVersion: String by props
         println("Submodule version: $pluginVersion")
 
-        project.plugins.apply("org.gradle.java-library")
+        project.apply(plugin = "org.gradle.java-library")
 
         val baseEx = project.extensions.getByType(BasePluginExtension::class)
         val javaEx = project.extensions.getByType(JavaPluginExtension::class)
@@ -123,12 +123,12 @@ class SubmodulePlugin : Plugin<Project> {
         val loom: Boolean
         val moddev: Boolean
         if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
-            project.plugins.apply("dev.architectury.loom")
+            project.apply(plugin = "dev.architectury.loom")
             loom = true
             moddev = false
         } else {
             if (platform == Platform.NEOFORGE) {
-                project.plugins.apply("net.neoforged.moddev")
+                project.apply(plugin = "net.neoforged.moddev")
                 loom = false
                 moddev = true
             } else if (platform == Platform.XPLAT) {
@@ -142,13 +142,13 @@ class SubmodulePlugin : Plugin<Project> {
                     moddev = false
                 }
             } else {
-                project.plugins.apply("fabric-loom")
+                project.apply(plugin = "fabric-loom")
                 loom = true
                 moddev = false
             }
         }
         if (kotlin) {
-            project.plugins.apply("org.jetbrains.kotlin.jvm")
+            project.apply(plugin = "org.jetbrains.kotlin.jvm")
         }
 
         project.extensions.create(
@@ -344,13 +344,13 @@ class SubmodulePlugin : Plugin<Project> {
             val neoforgeEx = project.extensions.getByType<NeoForgeExtension>()
 
             if (platform == Platform.NEOFORGE) {
-                neoforgeEx.version.set(project.getProperty<String>("neoforge_version"))
+                neoforgeEx.version = project.getProperty<String>("neoforge_version")
             } else if (platform == Platform.XPLAT) {
                 val minecraftVersion = project.getProperty<String>("minecraft_version")
                 val neoFormVersion =
                     project.findProperty("neoform_version") as? String ?: getNeoFormVersion(project, minecraftVersion)
 
-                neoforgeEx.neoFormVersion.set(neoFormVersion)
+                neoforgeEx.neoFormVersion = neoFormVersion
             }
 
             neoforgeEx.parchment {
