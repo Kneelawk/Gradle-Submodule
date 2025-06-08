@@ -71,6 +71,7 @@ class SubmodulePlugin : Plugin<Project> {
         )
     }
 
+    @Suppress("UNCHECKED_CAST")
     override fun apply(project: Project) {
         val props = Properties()
         props.load(javaClass.classLoader.getResourceAsStream("com/kneelawk/submodule/plugin.properties"))
@@ -124,8 +125,6 @@ class SubmodulePlugin : Plugin<Project> {
         }
 
         val kotlin = project.findProperty("submodule.kotlin").toString().toBoolean()
-
-        val neoformVersion = project.findProperty("neoform_version")
 
         // apply plugins
         val loom: Boolean
@@ -439,7 +438,7 @@ class SubmodulePlugin : Plugin<Project> {
 
             val processLinksDir = project.layout.buildDirectory.dir("processed-links")
             val processLinksOutput = processLinksDir.map { it.file("javadoc-links.txt") }
-            val processLinks = create("processLinks", ProcessResources::class.java) {
+            val processLinks = register("processLinks", ProcessResources::class.java) {
                 from(project.rootProject.file("javadoc-links.txt"))
                 into(processLinksDir)
 
