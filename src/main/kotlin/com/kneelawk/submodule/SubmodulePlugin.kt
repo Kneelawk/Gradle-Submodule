@@ -25,6 +25,7 @@
 
 package com.kneelawk.submodule
 
+import agency.highlysuspect.minivan.prov.MinecraftProvider
 import net.fabricmc.loom.api.LoomGradleExtensionAPI
 import net.fabricmc.loom.task.RemapJarTask
 import net.fabricmc.loom.task.RemapSourcesJarTask
@@ -32,6 +33,7 @@ import net.neoforged.moddevgradle.dsl.NeoForgeExtension
 import org.gradle.api.JavaVersion
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.logging.Logger
 import org.gradle.api.plugins.BasePluginExtension
 import org.gradle.api.plugins.JavaPluginExtension
 import org.gradle.api.tasks.SourceSetContainer
@@ -51,8 +53,12 @@ import org.jetbrains.kotlin.gradle.utils.extendsFrom
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
+import java.nio.file.FileSystems
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.Properties
 import java.util.TreeSet
+import kotlin.io.path.name
 
 class SubmodulePlugin : Plugin<Project> {
     companion object {
@@ -69,7 +75,7 @@ class SubmodulePlugin : Plugin<Project> {
         val props = Properties()
         props.load(javaClass.classLoader.getResourceAsStream("com/kneelawk/submodule/plugin.properties"))
         val pluginVersion: String by props
-        println("Submodule version: $pluginVersion")
+        project.logger.info("Submodule version: $pluginVersion")
 
         project.apply(plugin = "org.gradle.java-library")
 
@@ -86,6 +92,7 @@ class SubmodulePlugin : Plugin<Project> {
         val platform = when (platformStr) {
             "xplat" -> Platform.XPLAT
             "mojmap" -> Platform.MOJMAP
+            "intermediary" -> Platform.INTERMEDIARY
             "fabric" -> Platform.FABRIC
             "neoforge" -> Platform.NEOFORGE
             else -> throw IllegalArgumentException("Unrecognized submodule.platform type: $platformStr")
@@ -106,12 +113,13 @@ class SubmodulePlugin : Plugin<Project> {
             )
         }
 
-        val xplatModeStr = project.findProperty("submodule.xplat.mode") as? String ?: "moddev"
+        val xplatModeStr = project.findProperty("submodule.xplat.mode") as? String ?: "minivan"
         val xplatMode = when (xplatModeStr.lowercase()) {
             "loom" -> XplatMode.LOOM
             "moddev" -> XplatMode.MODDEV
+            "minivan" -> XplatMode.MINIVAN
             else -> throw IllegalArgumentException(
-                "Unrecognized submodule.xplat.mode '$xplatModeStr'. Supported modes are 'loom' and 'moddev' (default)."
+                "Unrecognized submodule.xplat.mode '$xplatModeStr'. Supported modes are 'loom', 'moddev', and 'minivan' (default)."
             )
         }
 
@@ -122,29 +130,44 @@ class SubmodulePlugin : Plugin<Project> {
         // apply plugins
         val loom: Boolean
         val moddev: Boolean
+        val minivan: Boolean
         if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
             project.apply(plugin = "dev.architectury.loom")
             loom = true
             moddev = false
+            minivan = false
         } else {
             if (platform == Platform.NEOFORGE) {
                 project.apply(plugin = "net.neoforged.moddev")
                 loom = false
                 moddev = true
+                minivan = false
             } else if (platform == Platform.XPLAT) {
-                if (xplatMode == XplatMode.MODDEV) {
-                    project.plugins.apply("net.neoforged.moddev")
-                    loom = false
-                    moddev = true
-                } else {
-                    project.plugins.apply("fabric-loom")
-                    loom = true
-                    moddev = false
+                when (xplatMode) {
+                    XplatMode.MODDEV -> {
+                        project.apply(plugin = "net.neoforged.moddev")
+                        loom = false
+                        moddev = true
+                        minivan = false
+                    }
+                    XplatMode.LOOM -> {
+                        project.apply(plugin = "fabric-loom")
+                        loom = true
+                        moddev = false
+                        minivan = false
+                    }
+                    XplatMode.MINIVAN -> {
+                        project.apply(plugin = "agency.highlysuspect.minivan")
+                        loom = false
+                        moddev = false
+                        minivan = true
+                    }
                 }
             } else {
                 project.apply(plugin = "fabric-loom")
                 loom = true
                 moddev = false
+                minivan = false
             }
         }
         if (kotlin) {
@@ -176,6 +199,10 @@ class SubmodulePlugin : Plugin<Project> {
             if (moddev) {
                 create("localRuntime")
                 named("runtimeClasspath").extendsFrom(named("localRuntime"))
+            }
+
+            if (minivan) {
+                create("accessWidenerDep")
             }
         }
 
@@ -238,7 +265,7 @@ class SubmodulePlugin : Plugin<Project> {
                 }
 
                 when (platform) {
-                    Platform.XPLAT, Platform.MOJMAP -> {
+                    Platform.XPLAT, Platform.MOJMAP, Platform.INTERMEDIARY -> {
                         val fabricLoaderVersion = project.getProperty<String>("fabric_loader_version")
                         add("modCompileOnly", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
                         add("modLocalRuntime", "net.fabricmc:fabric-loader:$fabricLoaderVersion")
@@ -276,27 +303,45 @@ class SubmodulePlugin : Plugin<Project> {
                         }
                     }
                 }
-            } else if (moddev && platform == Platform.XPLAT) {
-                val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
-                val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
+            } else if (moddev) {
+                if (platform == Platform.XPLAT) {
+                    val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
+                    val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
 
-                add("compileOnly", "net.fabricmc:sponge-mixin:$mixinVersion")
+                    add("compileOnly", "net.fabricmc:sponge-mixin:$mixinVersion")
 
-                // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
-                add("compileOnly", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
-                add("annotationProcessor", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+                    // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
+                    add("compileOnly", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+                    add("annotationProcessor", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
 
-                if (kotlin) {
-                    add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
-                    add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
-                    add("localRuntime", "org.jetbrains.kotlin:kotlin-stdlib")
-                    add("localRuntime", "org.jetbrains.kotlin:kotlin-reflect")
+                    if (kotlin) {
+                        add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                        add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                        add("localRuntime", "org.jetbrains.kotlin:kotlin-stdlib")
+                        add("localRuntime", "org.jetbrains.kotlin:kotlin-reflect")
+                    }
+                } else if (platform == Platform.NEOFORGE) {
+                    if (kotlin) {
+                        val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
+                        add("compileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                        add("localRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+                    }
                 }
-            } else if (moddev && platform == Platform.NEOFORGE) {
-                if (kotlin) {
-                    val kotlinVersion = project.getProperty<String>("neoforge_kotlin_version")
-                    add("compileOnly", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
-                    add("localRuntime", "thedarkcolour:kotlinforforge-neoforge:$kotlinVersion")
+            } else if (minivan) {
+                if (platform == Platform.XPLAT) {
+                    val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
+                    val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
+
+                    add("compileOnly", "net.fabricmc:sponge-mixin:$mixinVersion")
+
+                    // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
+                    add("compileOnly", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+                    add("annotationProcessor", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+
+                    if (kotlin) {
+                        add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
+                        add("compileOnly", "org.jetbrains.kotlin:kotlin-reflect")
+                    }
                 }
             }
 
@@ -363,6 +408,8 @@ class SubmodulePlugin : Plugin<Project> {
                     sourceSet(sourceSets.named("main").get())
                 }
             }
+        } else if (minivan) {
+            // all minivan stuff is done later
         }
 
         project.tasks {
@@ -413,7 +460,7 @@ class SubmodulePlugin : Plugin<Project> {
                     "https://logging.apache.org/log4j/2.x/javadoc/log4j-api/",
                     "https://www.slf4j.org/apidocs/",
                     "https://javadoc.lwjgl.org/",
-                    "https://fastutil.di.unimi.it/docs/",
+                    "https://javadoc.io/doc/it.unimi.dsi/fastutil/latest/",
                     "https://javadoc.scijava.org/JOML/",
                     "https://netty.io/4.1/api/",
                     "https://www.oshi.ooo/oshi-core-java11/apidocs/",
@@ -492,7 +539,7 @@ class SubmodulePlugin : Plugin<Project> {
                             listOf()
                         }
                         val collectedLinks = baseLinks + minecraftLinks + jbAnnotationsLinks + loadedLinks
-                        links = filterConnectable(collectedLinks)
+                        links = filterConnectable(collectedLinks, project.logger)
                     }
                 }
             }
@@ -515,6 +562,34 @@ class SubmodulePlugin : Plugin<Project> {
         }
 
         project.afterEvaluate {
+            if (minivan) {
+                val minecraftVersion = project.getProperty<String>("minecraft_version")
+
+                val aws = mutableSetOf<Path>()
+                configurations["accessWidenerDep"].files.forEach { file ->
+                    val path = file.toPath()
+                    if (Files.isRegularFile(path)) {
+                        try {
+                            FileSystems.newFileSystem(path).use { fs ->
+                                fs.rootDirectories.forEach { root ->
+                                    collectAws(root, aws, project.logger)
+                                }
+                            }
+                        } catch (e: IOException) {
+                            // wasn't an archive file
+                        }
+                    } else if (Files.isDirectory(path)) {
+                        collectAws(path, aws, project.logger)
+                    }
+                }
+
+                project.logger.info("Found {} access widener dependencies", aws.size)
+
+                val provider = MinecraftProvider(project, minecraftVersion, aws.toList())
+                val mc = provider.tryGetMinecraft()
+                mc.installTo(project, "compileOnly")
+            }
+
             tasks {
                 named("processResources", ProcessResources::class.java).configure {
                     val properties = mapOf(
@@ -537,21 +612,34 @@ class SubmodulePlugin : Plugin<Project> {
         }
     }
 
+    private fun collectAws(root: Path, aws: MutableSet<Path>, logger: Logger) {
+        Files.walk(root).use { stream ->
+            stream.forEach { path ->
+                if (path.name.endsWith(".accesswidener")) {
+                    aws.add(path)
+                    logger.debug("ACCESS WIDENER FOUND: {}", path.toUri())
+                }
+            }
+        }
+    }
+
     private val neoformVersionRegex = Regex("""^(?<mc>[a-z0-9.\-]+)-(?<date>\d+)\.(?<time>\d+)$""")
     private fun getNeoFormVersion(project: Project, minecraftVersion: String): String {
         val cacheFile = project.file(".gradle/neoform-version-cache/${minecraftVersion}.txt")
         try {
             if (cacheFile.exists()) {
                 val versionStr = cacheFile.readText().trim()
-                println("Found cached NeoForm version: $versionStr")
-                println("If any error occurs, try deleting '.gradle/neoform-version-cache/${minecraftVersion}.txt'")
+                project.logger.info("Found cached NeoForm version: $versionStr")
+                project.logger.info(
+                    "If any error occurs, try deleting '.gradle/neoform-version-cache/${minecraftVersion}.txt'"
+                )
                 return versionStr
             }
         } catch (e: Exception) {
             // if anything goes wrong, we try re-downloading the file
         }
 
-        println("Unable to read cached NeoForm version, downloading index...")
+        project.logger.info("Unable to read cached NeoForm version, downloading index...")
         try {
             val url = URI("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoform").toURL()
             val text = url.openStream().use { it.bufferedReader().readText() }
@@ -579,7 +667,7 @@ class SubmodulePlugin : Plugin<Project> {
             val version = versionSet.last
 
             val versionStr = version.toString()
-            println("Using re-indexed NeoForm version: $versionStr")
+            project.logger.info("Using re-indexed NeoForm version: $versionStr")
             cacheFile.writeText(versionStr)
 
             return versionStr
@@ -588,13 +676,13 @@ class SubmodulePlugin : Plugin<Project> {
         }
     }
 
-    private fun filterConnectable(links: List<String>): List<String> {
+    private fun filterConnectable(links: List<String>, logger: Logger): List<String> {
         return links.filter { link ->
             val link2 = if (link.endsWith('/')) link else "$link/"
             val res = checkLink("${link2}element-list") || checkLink("${link2}package-list")
 
             if (!res) {
-                println("Skipping ($link) due to connection errors")
+                logger.warn("Skipping ($link) due to connection errors")
             }
 
             res

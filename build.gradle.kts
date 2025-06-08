@@ -32,6 +32,7 @@ repositories {
     maven("https://maven.architectury.dev/") { name = "Architectury" }
     maven("https://maven.quiltmc.org/repository/release") { name = "Quilt" }
     maven("https://maven.neoforged.net/releases/") { name = "NeoForged" }
+    maven("https://repo.sleeping.town/") { name = "SleepingTown" }
     maven("https://kneelawk.com/maven") { name = "Kneelawk" }
 }
 
@@ -41,6 +42,9 @@ dependencies {
 
     val moddev_version: String by project
     implementation("net.neoforged.moddev:net.neoforged.moddev.gradle.plugin:$moddev_version")
+    
+    val minivan_version: String by project
+    implementation("agency.highlysuspect.minivan:agency.highlysuspect.minivan.gradle.plugin:$minivan_version")
 
     val kotlin_version: String by project
     implementation("org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin:$kotlin_version")

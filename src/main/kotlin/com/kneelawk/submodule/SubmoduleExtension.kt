@@ -45,26 +45,44 @@ abstract class SubmoduleExtension(
 ) {
     private val loom: Boolean
     private val moddev: Boolean
+    private val minivan: Boolean
 
     init {
         if (submoduleMode == SubmoduleMode.ARCHITECTURY) {
             loom = true
             moddev = false
+            minivan = false
         } else {
-            if (platform == Platform.NEOFORGE) {
-                loom = false
-                moddev = true
-            } else if (platform == Platform.XPLAT) {
-                if (xplatMode == XplatMode.MODDEV) {
+            when (platform) {
+                Platform.NEOFORGE -> {
                     loom = false
                     moddev = true
-                } else {
+                    minivan = false
+                }
+                Platform.XPLAT -> {
+                    when (xplatMode) {
+                        XplatMode.MODDEV -> {
+                            loom = false
+                            moddev = true
+                            minivan = false
+                        }
+                        XplatMode.LOOM -> {
+                            loom = true
+                            moddev = false
+                            minivan = false
+                        }
+                        XplatMode.MINIVAN -> {
+                            loom = false
+                            moddev = false
+                            minivan = true
+                        }
+                    }
+                }
+                else -> {
                     loom = true
                     moddev = false
+                    minivan = false
                 }
-            } else {
-                loom = true
-                moddev = false
             }
         }
     }
@@ -74,8 +92,8 @@ abstract class SubmoduleExtension(
     private val transitiveProjectDependencies = mutableListOf<ProjectDep>()
     private val transitiveExternalDependencies = mutableListOf<ExternalDep>()
 
-    var expansions = mapOf<String, Any>()
-    var metadataFiles = setOf<String>()
+    var expansions = mutableMapOf<String, Any>()
+    var metadataFiles = mutableSetOf<String>()
 
     fun setLibsDirectory() {
         val baseEx = project.extensions.getByType(BasePluginExtension::class)
@@ -85,7 +103,7 @@ abstract class SubmoduleExtension(
     /**
      * Mixin expansions are also applied when applying an xplat connection.
      */
-    fun applyMixinExpansions(refmapBasename: String) {
+    fun applyMixinExpansions(refmapBasename: String = modId) {
         refmapName = "${refmapBasename}.refmap.json"
 
         if (loom) {
@@ -94,21 +112,21 @@ abstract class SubmoduleExtension(
         }
 
         project.tasks.named("processResources", ProcessResources::class).configure {
-            if (loom && platform != Platform.NEOFORGE) {
-                val properties = mapOf("refmap" to refmapName) + expansions
-
-                filesMatching("*.mixins.json") {
-                    expand(properties)
-                }
-
-                inputs.properties(properties)
-            } else {
+            if (platform == Platform.NEOFORGE) {
                 val properties = expansions
 
                 exclude("fabric.mod.json")
 
                 filesMatching("*.mixins.json") {
                     filter { if (it.contains("refmap")) "" else it }
+                    expand(properties)
+                }
+
+                inputs.properties(properties)
+            } else {
+                val properties = mapOf("refmap" to refmapName) + expansions
+
+                filesMatching("*.mixins.json") {
                     expand(properties)
                 }
 
@@ -170,6 +188,7 @@ abstract class SubmoduleExtension(
                     transitiveDep.projectBase, transitiveDep.api, transitiveDep.include
                 )
                 Platform.MOJMAP -> mojmapProjectDependency(transitiveDep.projectBase, transitiveDep.api)
+                Platform.INTERMEDIARY -> intermediaryProjectDependency(transitiveDep.projectBase, transitiveDep.api)
             }
         }
 
@@ -185,6 +204,7 @@ abstract class SubmoduleExtension(
                     transitiveDep.api, transitiveDep.include, transitiveDep.getter
                 )
                 Platform.MOJMAP -> mojmapExternalDependency(transitiveDep.api, transitiveDep.getter)
+                Platform.INTERMEDIARY -> intermediaryExternalDependency(transitiveDep.api, transitiveDep.getter)
             }
         }
 
@@ -192,21 +212,21 @@ abstract class SubmoduleExtension(
             named("processResources", ProcessResources::class.java).configure {
                 from(mainSource.map { it.resources })
 
-                if (loom && platform != Platform.NEOFORGE) {
-                    val properties = mapOf("refmap" to refmapName) + expansions
-
-                    filesMatching("*.mixins.json") {
-                        expand(properties)
-                    }
-
-                    inputs.properties(properties)
-                } else {
+                if (platform == Platform.NEOFORGE) {
                     val properties = expansions
 
                     exclude("fabric.mod.json")
 
                     filesMatching("*.mixins.json") {
                         filter { if (it.contains("refmap")) "" else it }
+                        expand(properties)
+                    }
+
+                    inputs.properties(properties)
+                } else {
+                    val properties = mapOf("refmap" to refmapName) + expansions
+
+                    filesMatching("*.mixins.json") {
                         expand(properties)
                     }
 
@@ -307,9 +327,11 @@ abstract class SubmoduleExtension(
     ) {
         val config = if (api) "api" else "compileOnly"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
+        // we assume all modules in a project have the same xplat mode
+        val xplatConfiguration = if (xplatMode == XplatMode.LOOM) "namedElements" else null
 
         project.dependencies {
-            add(config, project(xplatName, configuration = "namedElements"))
+            add(config, project(xplatName, configuration = xplatConfiguration))
         }
 
         if (transitive) {
@@ -321,9 +343,11 @@ abstract class SubmoduleExtension(
         val config = if (api) "api" else "implementation"
         val xplatName = if (projectBase == ":") ":xplat" else "${projectBase}-xplat"
         val fabricName = if (projectBase == ":") ":fabric" else "${projectBase}-fabric"
+        // we assume all modules in a project have the same xplat mode
+        val xplatConfiguration = if (xplatMode == XplatMode.LOOM) "namedElements" else null
 
         project.dependencies {
-            add("compileOnly", project(xplatName, configuration = "namedElements")) {
+            add("compileOnly", project(xplatName, configuration = xplatConfiguration)) {
                 isTransitive = false
             }
             add(config, project(fabricName, configuration = "namedElements"))
@@ -378,6 +402,15 @@ abstract class SubmoduleExtension(
         }
     }
 
+    fun intermediaryProjectDependency(projectBase: String, api: Boolean = true) {
+        val config = if (api) "api" else "compileOnly"
+        val intermediaryName = if (projectBase == ":") ":xplat-intermediary" else "${projectBase}-xplat-intermediary"
+
+        project.dependencies {
+            add(config, project(intermediaryName, configuration = "namedElements"))
+        }
+    }
+
     fun xplatExternalDependency(
         transitive: Boolean = true, api: Boolean = true, include: Boolean = true, getter: (platform: String) -> String
     ) {
@@ -421,6 +454,14 @@ abstract class SubmoduleExtension(
 
         project.dependencies {
             add(config, getter("xplat-mojmap"))
+        }
+    }
+
+    fun intermediaryExternalDependency(api: Boolean = true, getter: (platform: String) -> String) {
+        val config = if (api) "modApi" else "modCompileOnly"
+
+        project.dependencies {
+            add(config, getter("xplat-intermediary"))
         }
     }
 }

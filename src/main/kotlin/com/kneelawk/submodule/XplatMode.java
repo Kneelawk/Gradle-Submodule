@@ -1,5 +1,5 @@
 package com.kneelawk.submodule;
 
 public enum XplatMode {
-    LOOM, MODDEV
+    LOOM, MODDEV, MINIVAN
 }
