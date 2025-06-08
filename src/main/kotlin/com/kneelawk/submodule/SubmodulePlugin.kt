@@ -234,6 +234,9 @@ class SubmodulePlugin : Plugin<Project> {
             mavenLocal()
         }
 
+        val jbAnnotationsVersion =
+            project.findProperty("jetbrains_annotations_version") as? String ?: "26.0.2"
+
         project.dependencies {
             if (loom) {
                 val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
@@ -336,6 +339,8 @@ class SubmodulePlugin : Plugin<Project> {
                     // fabric and neoforge both bundle mixinextras, so it is safe to use it in common
                     add("compileOnly", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
                     add("annotationProcessor", "io.github.llamalad7:mixinextras-common:$mixinextrasVersion")
+
+                    add("compileOnly", "org.jetbrains:annotations:$jbAnnotationsVersion")
 
                     if (kotlin) {
                         add("compileOnly", "org.jetbrains.kotlin:kotlin-stdlib")
@@ -522,7 +527,6 @@ class SubmodulePlugin : Plugin<Project> {
                     else -> listOf()
                 }
 
-                val jbAnnotationsVersion = project.findProperty("jetbrains_annotations_version") as? String ?: "24.0.0"
                 val jbAnnotationsLinks = listOf(
                     "https://javadoc.io/doc/org.jetbrains/annotations/${jbAnnotationsVersion}/"
                 )
