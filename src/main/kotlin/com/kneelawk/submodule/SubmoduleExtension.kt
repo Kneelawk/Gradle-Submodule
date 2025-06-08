@@ -146,7 +146,6 @@ abstract class SubmoduleExtension(
 
         if (loom) {
             val loomEx = project.extensions.getByType(LoomGradleExtensionAPI::class)
-            val xplatLoom = xplatProject.extensions.getByType(LoomGradleExtensionAPI::class)
 
             if (loomEx.mods.findByName("main") != null) {
                 loomEx.mods.named("main").configure { sourceSet(mainSource.get()) }
@@ -169,9 +168,11 @@ abstract class SubmoduleExtension(
 //                sourceSet(mainSource.get())
             }
         }
+        
+        val xplatConfiguration = if (xplatMode == XplatMode.LOOM) "namedElements" else null
 
         project.dependencies {
-            add("compileOnly", project(xplatName, configuration = "namedElements")) {
+            add("compileOnly", project(xplatName, configuration = xplatConfiguration)) {
                 isTransitive = false
             }
         }
@@ -414,7 +415,7 @@ abstract class SubmoduleExtension(
     fun xplatExternalDependency(
         transitive: Boolean = true, api: Boolean = true, include: Boolean = true, getter: (platform: String) -> String
     ) {
-        val config = if (api) "modApi" else "modCompileOnly"
+        val config = if (loom) { if (api) "modApi" else "modCompileOnly" } else { if (api) "api" else "compileOnly" }
         val xplatPlatform = if (xplatMode == XplatMode.LOOM) "xplat-intermediary" else "xplat-mojmap"
 
         project.dependencies {
