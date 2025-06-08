@@ -459,7 +459,7 @@ class SubmodulePlugin : Plugin<Project> {
                     "https://logging.apache.org/log4j/2.x/javadoc/log4j-api/",
                     "https://www.slf4j.org/apidocs/",
                     "https://javadoc.lwjgl.org/",
-                    "https://javadoc.io/doc/it.unimi.dsi/fastutil/latest/",
+                    "https://javadoc.io/doc/it.unimi.dsi/fastutil/8.5.15/",
                     "https://javadoc.scijava.org/JOML/",
                     "https://netty.io/4.1/api/",
                     "https://www.oshi.ooo/oshi-core-java11/apidocs/",
