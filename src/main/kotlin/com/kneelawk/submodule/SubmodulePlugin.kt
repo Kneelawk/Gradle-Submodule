@@ -76,7 +76,7 @@ class SubmodulePlugin : Plugin<Project> {
         val props = Properties()
         props.load(javaClass.classLoader.getResourceAsStream("com/kneelawk/submodule/plugin.properties"))
         val pluginVersion: String by props
-        project.logger.info("Submodule version: $pluginVersion")
+        project.logger.lifecycle("Submodule version: $pluginVersion")
 
         project.apply(plugin = "org.gradle.java-library")
 
@@ -586,7 +586,7 @@ class SubmodulePlugin : Plugin<Project> {
                     }
                 }
 
-                project.logger.info("Found {} access widener dependencies", aws.size)
+                project.logger.lifecycle("Found {} access widener dependencies", aws.size)
 
                 val provider = MinecraftProvider(project, minecraftVersion, aws.toList())
                 val mc = provider.tryGetMinecraft()
@@ -632,8 +632,8 @@ class SubmodulePlugin : Plugin<Project> {
         try {
             if (cacheFile.exists()) {
                 val versionStr = cacheFile.readText().trim()
-                project.logger.info("Found cached NeoForm version: $versionStr")
-                project.logger.info(
+                project.logger.lifecycle("Found cached NeoForm version: $versionStr")
+                project.logger.lifecycle(
                     "If any error occurs, try deleting '.gradle/neoform-version-cache/${minecraftVersion}.txt'"
                 )
                 return versionStr
@@ -642,7 +642,7 @@ class SubmodulePlugin : Plugin<Project> {
             // if anything goes wrong, we try re-downloading the file
         }
 
-        project.logger.info("Unable to read cached NeoForm version, downloading index...")
+        project.logger.lifecycle("Unable to read cached NeoForm version, downloading index...")
         try {
             val url = URI("https://maven.neoforged.net/api/maven/versions/releases/net/neoforged/neoform").toURL()
             val text = url.openStream().use { it.bufferedReader().readText() }
@@ -670,7 +670,7 @@ class SubmodulePlugin : Plugin<Project> {
             val version = versionSet.last
 
             val versionStr = version.toString()
-            project.logger.info("Using re-indexed NeoForm version: $versionStr")
+            project.logger.lifecycle("Using re-indexed NeoForm version: $versionStr")
             cacheFile.writeText(versionStr)
 
             return versionStr
