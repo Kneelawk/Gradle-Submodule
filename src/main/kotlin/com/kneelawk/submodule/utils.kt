@@ -26,7 +26,18 @@
 package com.kneelawk.submodule
 
 import org.gradle.api.Project
+import org.gradle.internal.extensions.core.extra
 
 inline fun <reified T> Project.getProperty(propertyName: String): T {
-    return property(propertyName) as? T ?: throw IllegalStateException("No property '$propertyName' found")
+    return findProperty(propertyName) as? T
+        ?: (project.extra.get("submoduleIncludeProperties") as Map<String, Any>)[propertyName] as? T
+        ?: throw IllegalStateException("No property '$propertyName' found")
 }
+
+inline fun <reified T> Project.findProperty(propertyName: String): T? {
+    return findProperty(propertyName) as? T
+        ?: (project.extra.get("submoduleIncludeProperties") as Map<String, Any>)[propertyName] as? T
+}
+
+inline val Project.customProperties: Map<String, Any?>
+    get() = properties + (project.extra.get("submoduleIncludeProperties") as Map<String, Any>)

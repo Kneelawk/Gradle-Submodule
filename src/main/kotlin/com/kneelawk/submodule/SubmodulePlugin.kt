@@ -42,6 +42,7 @@ import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.javadoc.Javadoc
 import org.gradle.api.tasks.testing.Test
 import org.gradle.external.javadoc.StandardJavadocDocletOptions
+import org.gradle.internal.extensions.core.extra
 import org.gradle.jvm.tasks.Jar
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.*
@@ -50,6 +51,7 @@ import org.jetbrains.kotlin.com.google.gson.JsonParser
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 import org.jetbrains.kotlin.gradle.utils.extendsFrom
+import java.io.File
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
@@ -69,14 +71,30 @@ class SubmodulePlugin : Plugin<Project> {
             "META-INF/neoforge.mods.toml",
             "pack.mcmeta"
         )
+
+        private val commaRegex = Regex("\\s*,\\s*")
     }
 
     @Suppress("UNCHECKED_CAST")
     override fun apply(project: Project) {
         val props = Properties()
-        props.load(javaClass.classLoader.getResourceAsStream("com/kneelawk/submodule/plugin.properties"))
+        javaClass.classLoader.getResourceAsStream("com/kneelawk/submodule/plugin.properties")
+            .use { stream -> props.load(stream) }
         val pluginVersion: String by props
         project.logger.lifecycle("Submodule version: $pluginVersion")
+        
+        val customProperties = mutableMapOf<String, Any>()
+        project.extra.set("submoduleIncludeProperties", customProperties)
+
+        val include = project.findProperty("submodule.include") as? String
+        if (include != null) {
+            for (i in include.split(commaRegex)) {
+                val includeProps = Properties()
+                File(project.projectDir, i).inputStream().use { stream -> includeProps.load(stream) }
+                project.logger.lifecycle("Submodule including: $includeProps")
+                customProperties.putAll(includeProps.map { it.key.toString() to it.value.toString() })
+            }
+        }
 
         project.apply(plugin = "org.gradle.java-library")
 
@@ -105,7 +123,7 @@ class SubmodulePlugin : Plugin<Project> {
 
         val modId = project.getProperty<String>("mod_id")
 
-        val submoduleModeStr = project.findProperty("submodule.mode") as? String ?: "platform"
+        val submoduleModeStr = project.findProperty<String>("submodule.mode") ?: "platform"
         val submoduleMode = when (submoduleModeStr.lowercase()) {
             "platform" -> SubmoduleMode.PLATFORM
             "architectury", "arch" -> SubmoduleMode.ARCHITECTURY
@@ -114,7 +132,7 @@ class SubmodulePlugin : Plugin<Project> {
             )
         }
 
-        val xplatModeStr = project.findProperty("submodule.xplat.mode") as? String ?: "minivan"
+        val xplatModeStr = project.findProperty<String>("submodule.xplat.mode") ?: "minivan"
         val xplatMode = when (xplatModeStr.lowercase()) {
             "loom" -> XplatMode.LOOM
             "moddev" -> XplatMode.MODDEV
@@ -218,7 +236,7 @@ class SubmodulePlugin : Plugin<Project> {
 
             // manage neoforge pr repos
             if (platform == Platform.NEOFORGE) {
-                val neoforgePr = project.findProperty("neoforge_pr") as? String ?: "none"
+                val neoforgePr = project.findProperty<String>("neoforge_pr") ?: "none"
                 val neoforgePrNum = neoforgePr.toIntOrNull()
                 if (neoforgePrNum != null) {
                     maven("https://prmaven.neoforged.net/NeoForge/pr${neoforgePrNum}") {
@@ -235,7 +253,7 @@ class SubmodulePlugin : Plugin<Project> {
         }
 
         val jbAnnotationsVersion =
-            project.findProperty("jetbrains_annotations_version") as? String ?: "26.0.2"
+            project.findProperty<String>("jetbrains_annotations_version") ?: "26.0.2"
 
         project.dependencies {
             if (loom) {
@@ -244,7 +262,7 @@ class SubmodulePlugin : Plugin<Project> {
                 val minecraftVersion = project.getProperty<String>("minecraft_version")
                 add("minecraft", "com.mojang:minecraft:$minecraftVersion")
 
-                val mappingsType = (project.findProperty("mappings_type") as? String)?.lowercase() ?: "mojmap"
+                val mappingsType = (project.findProperty<String>("mappings_type"))?.lowercase() ?: "mojmap"
                 when (mappingsType) {
                     "mojmap" -> {
                         val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
@@ -307,8 +325,8 @@ class SubmodulePlugin : Plugin<Project> {
                 }
             } else if (moddev) {
                 if (platform == Platform.XPLAT) {
-                    val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
-                    val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
+                    val mixinVersion = project.findProperty<String>("mixin_version") ?: "0.15.4+mixin.0.8.7"
+                    val mixinextrasVersion = project.findProperty<String>("mixinextras_version") ?: "0.4.1"
 
                     add("compileOnly", "net.fabricmc:sponge-mixin:$mixinVersion")
 
@@ -331,8 +349,8 @@ class SubmodulePlugin : Plugin<Project> {
                 }
             } else if (minivan) {
                 if (platform == Platform.XPLAT) {
-                    val mixinVersion = project.findProperty("mixin_version") as? String ?: "0.15.4+mixin.0.8.7"
-                    val mixinextrasVersion = project.findProperty("mixinextras_version") as? String ?: "0.4.1"
+                    val mixinVersion = project.findProperty<String>("mixin_version") ?: "0.15.4+mixin.0.8.7"
+                    val mixinextrasVersion = project.findProperty<String>("mixinextras_version") ?: "0.4.1"
 
                     add("compileOnly", "net.fabricmc:sponge-mixin:$mixinVersion")
 
@@ -377,7 +395,7 @@ class SubmodulePlugin : Plugin<Project> {
                 }
             }
 
-            val mappingsType = (project.findProperty("mappings_type") as? String)?.lowercase() ?: "mojmap"
+            val mappingsType = (project.findProperty<String>("mappings_type"))?.lowercase() ?: "mojmap"
             if (platform == Platform.MOJMAP && mappingsType == "mojmap") {
                 project.tasks {
                     named("remapJar", RemapJarTask::class).configure {
@@ -397,7 +415,7 @@ class SubmodulePlugin : Plugin<Project> {
             } else if (platform == Platform.XPLAT) {
                 val minecraftVersion = project.getProperty<String>("minecraft_version")
                 val neoFormVersion =
-                    project.findProperty("neoform_version") as? String ?: getNeoFormVersion(project, minecraftVersion)
+                    project.findProperty<String>("neoform_version") ?: getNeoFormVersion(project, minecraftVersion)
 
                 neoforgeEx.neoFormVersion = neoFormVersion
             }
@@ -447,16 +465,16 @@ class SubmodulePlugin : Plugin<Project> {
                 from(project.rootProject.file("javadoc-links.txt"))
                 into(processLinksDir)
 
-                inputs.properties(project.properties)
+                inputs.properties(project.customProperties)
 
-                expand(project.properties)
+                expand(project.customProperties)
             }
 
             named("javadoc", Javadoc::class.java).configure {
                 dependsOn(processLinks)
 
                 val minecraftVersion = project.getProperty<String>("minecraft_version")
-                val mappingsType = project.findProperty("mappings_type") as? String ?: "mojmap"
+                val mappingsType = project.findProperty<String>("mappings_type") ?: "mojmap"
 
                 val baseLinks = listOf(
                     "https://guava.dev/releases/32.1.2-jre/api/docs/",
@@ -485,8 +503,8 @@ class SubmodulePlugin : Plugin<Project> {
                     "mojmap" -> {
                         val parchmentMcVersion = project.getProperty<String>("parchment_mc_version")
                         val parchmentVersion = project.getProperty<String>("parchment_version")
-                        val javadocBuild = project.findProperty("javadoc_build") as? String ?: "1"
-                        val javadocSource = project.findProperty("javadoc_source") as? String ?: run {
+                        val javadocBuild = project.findProperty<String>("javadoc_build") ?: "1"
+                        val javadocSource = project.findProperty<String>("javadoc_source") ?: run {
                             val pieces = minecraftVersion.split('.')
                             val major = pieces[1].toIntOrNull()
                             val minor = pieces.getOrNull(2)?.toIntOrNull()
@@ -595,10 +613,18 @@ class SubmodulePlugin : Plugin<Project> {
 
             tasks {
                 named("processResources", ProcessResources::class.java).configure {
+                    val expansionsPrefix = "submodule.expansions."
+                    val propsExpansions = project.customProperties.asSequence().filter { it.key.startsWith(expansionsPrefix) }
+                        .map { it.key.substring(expansionsPrefix.length) to it.value }.toMap()
                     val properties = mapOf(
                         "version" to project.version,
                         "mod_id" to modId
-                    ) + subExt.expansions
+                    ) + propsExpansions + subExt.expansions
+
+                    project.logger.info("Processing ${project.name} expansions:")
+                    for ((k, v) in properties) {
+                        project.logger.info("  '$k': '$v'")
+                    }
 
                     inputs.properties(properties)
 
