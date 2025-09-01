@@ -47,7 +47,7 @@ dependencies {
     compileOnly("agency.highlysuspect.minivan:agency.highlysuspect.minivan.gradle.plugin:$minivan_version")
 
     val kotlin_version: String by project
-    compileOnly("org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin:$kotlin_version")
+    implementation("org.jetbrains.kotlin.jvm:org.jetbrains.kotlin.jvm.gradle.plugin:$kotlin_version")
 }
 
 tasks {
