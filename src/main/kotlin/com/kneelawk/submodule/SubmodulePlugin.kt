@@ -82,7 +82,7 @@ class SubmodulePlugin : Plugin<Project> {
             .use { stream -> props.load(stream) }
         val pluginVersion: String by props
         project.logger.lifecycle("Submodule version: $pluginVersion")
-        
+
         val customProperties = mutableMapOf<String, Any>()
         project.extra.set("submoduleIncludeProperties", customProperties)
 
@@ -567,6 +567,8 @@ class SubmodulePlugin : Plugin<Project> {
             named("test", Test::class.java).configure {
                 useJUnitPlatform()
 
+                failOnNoDiscoveredTests = false
+
                 maxHeapSize = "1G"
 
                 testLogging {
@@ -613,8 +615,9 @@ class SubmodulePlugin : Plugin<Project> {
             tasks {
                 named("processResources", ProcessResources::class.java).configure {
                     val expansionsPrefix = "submodule.expansions."
-                    val propsExpansions = project.customProperties.asSequence().filter { it.key.startsWith(expansionsPrefix) }
-                        .map { it.key.substring(expansionsPrefix.length) to it.value }.toMap()
+                    val propsExpansions =
+                        project.customProperties.asSequence().filter { it.key.startsWith(expansionsPrefix) }
+                            .map { it.key.substring(expansionsPrefix.length) to it.value }.toMap()
                     val properties = mapOf(
                         "version" to project.version,
                         "mod_id" to modId
