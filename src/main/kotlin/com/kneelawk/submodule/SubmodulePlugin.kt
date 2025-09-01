@@ -91,7 +91,6 @@ class SubmodulePlugin : Plugin<Project> {
             for (i in include.split(commaRegex)) {
                 val includeProps = Properties()
                 File(project.projectDir, i).inputStream().use { stream -> includeProps.load(stream) }
-                project.logger.lifecycle("Submodule including: $includeProps")
                 customProperties.putAll(includeProps.map { it.key.toString() to it.value.toString() })
             }
         }
