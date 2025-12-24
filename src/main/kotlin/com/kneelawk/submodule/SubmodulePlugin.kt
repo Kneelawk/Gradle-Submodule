@@ -25,6 +25,7 @@
 
 package com.kneelawk.submodule
 
+import agency.highlysuspect.minivan.MinivanExt
 import agency.highlysuspect.minivan.prov.MinecraftProvider
 import net.fabricmc.loom.api.LoomGradleExtensionAPI
 import net.fabricmc.loom.task.RemapJarTask
@@ -606,6 +607,11 @@ class SubmodulePlugin : Plugin<Project> {
                 }
 
                 project.logger.lifecycle("Found {} access widener dependencies", aws.size)
+
+                val minivanExt = extensions.getByType<MinivanExt>()
+                minivanExt.accessWideners.forEach { file -> aws.add(file.toPath()) }
+
+                project.logger.lifecycle("Found {} access wideners total", aws.size)
 
                 val provider = MinecraftProvider(project, minecraftVersion, aws.toList())
                 val mc = provider.tryGetMinecraft()
